@@ -1,2 +1,2 @@
 data/glove/glove.840B.300d.txt
-events.*
+code/vis_checkpoints/*
