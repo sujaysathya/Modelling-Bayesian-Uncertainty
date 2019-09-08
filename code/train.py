@@ -24,12 +24,13 @@ def prepare_training():
 
     print("\n\n==>> Getting Data splits..")
     train_docs, train_labels, test_docs, test_labels = get_data_splits()
+    print("\nTotal training docs: {} \nTotal test docs: {}\n".format(len(train_docs), len(test_docs)) + "-"*35)
 
     print("\n==>> Tokenizing each document...")
 
     print("\nTraining set:\n")
     train_data = tokenize(train_docs)
-    print("\nTest set:\n")
+    print("\nTest set:\n" + "-"*35)
     test_data = tokenize(test_docs)
 
 

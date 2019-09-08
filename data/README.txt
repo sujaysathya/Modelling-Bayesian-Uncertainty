@@ -1,0 +1,1 @@
+Download and place the glove.840B.300D.txt GLOVE embeddings in a folder called "glove" here.
