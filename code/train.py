@@ -16,8 +16,22 @@ from torchtext.data import Field, BucketIterator
 from torchtext import datasets
 import torch.nn as nn
 
+from data_utils import *
 
 def prepare_training():
+
+    print("="*80 + "\n\t\t\t\t Preparing Data\n" + "="*80)
+
+    print("\n\n==>> Getting Data splits..")
+    train_docs, train_labels, test_docs, test_labels = get_data_splits()
+
+    print("\n==>> Tokenizing each document...")
+
+    print("\nTraining set:\n")
+    train_data = tokenize(train_docs)
+    print("\nTest set:\n")
+    test_data = tokenize(test_docs)
+
 
     return None
 
@@ -40,7 +54,7 @@ if __name__ == '__main__':
     # Required Paths
     parser.add_argument('--reuters_path', type = str, default = '../data/reuters',
                           help='path to reuters data (raw data)')
-    parser.add_argument('--glove_path', type = str, default = './data/glove/glove.840B.300d.txt',
+    parser.add_argument('--glove_path', type = str, default = '../data/glove/glove.840B.300d.txt',
                           help='path for Glove embeddings (850B, 300D)')
     parser.add_argument('--model_checkpoint_path', type = str, default = './model_checkpoints',
                           help='Directory for saving trained model checkpoints')
@@ -95,19 +109,24 @@ if __name__ == '__main__':
     if not os.path.exists(model_path):
         print("\nCreating checkpoint path for saved models at:  {}\n".format(model_path))
         os.makedirs(model_path)
+    if not os.path.exists(args.vis_path):
+        print("\nCreating checkpoint path for Tensorboard visualizations at:  {}\n".format(args.vis_path))
+        os.makedirs(args.vis_path)
     if config['model_name'] not in ['lstm', 'bilstm', 'bilstm_attn']:
         raise ValueError("[!] ERROR:  model_name is incorrect. Choose one of - lstm / bilstm / bilstm_attn")
 
 
     # Prepare the tensorboard writer
-    writer = SummaryWriter(os.path.join('logs', config['model_name']))
+    writer = SummaryWriter(os.path.join(args.vis_path, config['model_name']))
 
     # Prepare the datasets and iterator for training and evaluation
-    train_batch_loader, dev_batch_loader, test_batch_loader, TEXT, LABEL = prepare_training()
+    # train_batch_loader, dev_batch_loader, test_batch_loader, TEXT, LABEL = prepare_training()
+    prepare_training()
 
     #Print args
     print("\n" + "x"*50 + "\n\nRunning training with the following parameters: \n")
     for key, value in config.items():
         print(key + ' : ' + str(value))
     print("\n" + "x"*50)
+
     train_network()
