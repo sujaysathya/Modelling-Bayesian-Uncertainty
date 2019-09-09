@@ -1,6 +1,6 @@
-import argparse, time, datetime
+import argparse, time, datetime, shutil
 import pprint
-import sys, os
+import sys, os, glob
 import argparse
 
 import numpy as np
@@ -17,32 +17,23 @@ from torchtext import datasets
 import torch.nn as nn
 
 from data_utils import *
-
-def prepare_training():
-
-    print("="*80 + "\n\t\t\t\t Preparing Data\n" + "="*80)
-
-    print("\n\n==>> Getting Data splits..")
-    train_docs, train_labels, test_docs, test_labels = get_data_splits()
-    print("\nTotal training docs: {} \nTotal test docs: {}\n".format(len(train_docs), len(test_docs)) + "-"*35)
-
-    print("\n==>> Tokenizing each document...")
-
-    print("\nTraining set:\n")
-    train_data = tokenize(train_docs)
-    print("\nTest set:\n" + "-"*35)
-    test_data = tokenize(test_docs)
+from models import *
+from utils import *
 
 
-    return None
 
 def eval_network():
 
     return None
 
 
-def train_network():
 
+def train_network():
+    print("\n\n"+ "="*80 + "\n\t\t\t\t Training Network\n" + "="*80)
+
+    train_x, train_y = train
+    val_x, val_y = val
+    test_x, test_y = test
     return None
 
 
@@ -66,7 +57,7 @@ if __name__ == '__main__':
 
     # Training Params
     parser.add_argument('--model_name', type = str, default = 'bilstm',
-                          help='model name: lstm / bilstm / bilstm_attn')
+                          help='model name: bilstm / bilstm_attn')
     parser.add_argument('--lr', type = float, default = 1e-4,
                           help='Learning rate for training')
     parser.add_argument('--batch_size', type = int, default = 32,
@@ -91,6 +82,8 @@ if __name__ == '__main__':
                         help = 'Momentum for optimizer')
     parser.add_argument('--max_epoch', type = int, default = 50,
                         help = 'Max epochs to train for')
+    parser.add_argument('--val_split', type = int, default = 0.1,
+                        help = 'Ratio of training data to be split into validation set')
 
     args, unparsed = parser.parse_known_args()
     config = args.__dict__
@@ -103,6 +96,7 @@ if __name__ == '__main__':
 
     # Check all provided paths:
     model_path = os.path.join(config['model_checkpoint_path'], config['model_name'])
+    vis_path = os.path.join(config['vis_path'], config['model_name'])
     if not os.path.exists(config['reuters_path']):
         raise ValueError("[!] ERROR: Reuters data path does not exist")
     if not os.path.exists(config['glove_path']):
@@ -110,19 +104,21 @@ if __name__ == '__main__':
     if not os.path.exists(model_path):
         print("\nCreating checkpoint path for saved models at:  {}\n".format(model_path))
         os.makedirs(model_path)
-    if not os.path.exists(args.vis_path):
-        print("\nCreating checkpoint path for Tensorboard visualizations at:  {}\n".format(args.vis_path))
-        os.makedirs(args.vis_path)
+    if not os.path.exists(vis_path):
+        print("\nCreating checkpoint path for Tensorboard visualizations at:  {}\n".format(vis_path))
+        os.makedirs(vis_path)
+    else:
+        print("\nCleaning Visualization path of older tensorboard files...\n")
+        shutil.rmtree(vis_path)
     if config['model_name'] not in ['lstm', 'bilstm', 'bilstm_attn']:
-        raise ValueError("[!] ERROR:  model_name is incorrect. Choose one of - lstm / bilstm / bilstm_attn")
+        raise ValueError("[!] ERROR:  model_name is incorrect. Choose one of - bilstm / bilstm_attn")
 
 
     # Prepare the tensorboard writer
     writer = SummaryWriter(os.path.join(args.vis_path, config['model_name']))
 
     # Prepare the datasets and iterator for training and evaluation
-    # train_batch_loader, dev_batch_loader, test_batch_loader, TEXT, LABEL = prepare_training()
-    prepare_training()
+    train, val, test, vocab, embeddings = prepare_training(config)
 
     #Print args
     print("\n" + "x"*50 + "\n\nRunning training with the following parameters: \n")
