@@ -24,15 +24,20 @@ from utils import *
 
 
 
-def eval_network():
+def eval_network(model, test = False):
     eval_acc = 0
-    batch_loader = test_batch_loader if test else dev_batch_loader
+    total_iters = int(np.ceil(len(val_y)/config['batch_size'])) if not test else int(np.ceil(test_y/config['batch_size']))
     model.eval()
     with torch.no_grad():
-        for iters, (premise, hyp, label) in enumerate(batch_loader):
-            out = model(premise[0], premise[1], hyp[0], hyp[1])
-            preds = torch.argmax(out, dim=1)
-            accuracy = torch.sum(preds == label, dtype=torch.float32) / out.shape[0]
+        for iters in range(total_iters):
+            start_idx = iters*config['batch_size']
+            end_idx = start_idx + config['batch_size']
+    
+            doc_batch, doc_lens = get_batch_from_idx(config, embeddings, val_x[start_idx : end_idx]) if not test else get_batch_from_idx(config, embeddings, test_y[start_idx : end_idx])
+            doc_batch = Variable(doc_batch.to(device))
+            label_batch = Variable(torch.LongTensor(val_y[start_idx:end_idx])).to(device) if not test else Variable(torch.LongTensor(test_y[start_idx:end_idx])).to(device)
+            preds = model(doc_batch, doc_lens)
+            accuracy = torch.sum(preds == label_batch, dtype=torch.float32) / preds.shape[0]
             eval_acc += accuracy
         eval_acc /= iters
     return eval_acc
@@ -51,7 +56,7 @@ def train_network():
     # Initialize the model, optimizer and loss function
     model = Doc_Classifier(config)
     optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
-    criterion = nn.BCELoss(reduction = None)
+    criterion = nn.BCELoss(reduction = 'none')
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,step_size= config["lr_decay_step"], gamma= config["lr_decay_factor"])
 
     # Load the checkpoint to resume training if found
@@ -87,27 +92,28 @@ def train_network():
         train_labels = [train_y[i] for i in permute_idxs]
 
         total_iters = int(np.ceil(len(train_labels)/config['batch_size']))
-
-        model.train()
         for iters in range(total_iters):
+            model.train()
+            lr_scheduler.step()
+
             start_idx = iters*config['batch_size']
             end_idx = start_idx + config['batch_size']
 
-            doc_batch, doc_lens = get_batch_from_idx(train_data[start_idx : end_idx])
+            doc_batch, doc_lens = get_batch_from_idx(config, embeddings, train_data[start_idx : end_idx])
             doc_batch = Variable(doc_batch.to(device))
-            label_batch = Variable(torch.LongTensor(train_labels[start_idx:end_idx])).to(device)
+            label_batch = Variable(torch.FloatTensor(train_labels[start_idx:end_idx])).to(device)
 
             preds = model(doc_batch, doc_lens)
-            loss = criterion(out, label_batch)
+            loss = criterion(preds, label_batch)
 
             optimizer.zero_grad()
-            loss.backward()
+            loss.backward(torch.ones_like(loss))
             optimizer.step()
 
-            accuracy = torch.sum(preds == label, dtype=torch.float32) / out.shape[0]
-            train_loss += loss.detach().item()
+            accuracy = torch.sum(preds == label_batch, dtype=torch.float32) / preds.shape[0]
+            train_loss += loss.mean().detach().item()
             train_acc += accuracy
-            if iters%500 == 0:
+            if iters%60 == 0:
                 writer.add_scalar('Train/iters/loss', train_loss/(iters+1), ((iters+1)+ total_iters))
                 writer.add_scalar('Train/iters/accuracy', train_acc/(iters+1)*100, ((iters+1)+ total_iters))
                 for name, param in model.named_parameters():
@@ -143,15 +149,14 @@ def train_network():
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'text_vocab': TEXT.vocab.stoi,
-                'label_vocab': LABEL.vocab.stoi
+                'text_vocab': vocab,
             }, os.path.join(config['checkpoint_path'], config['model_name'], config['outputmodelname']))
 
         # If validation accuracy does not improve, divide the learning rate by 5 and
         # if learning rate falls below 1e-5 terminate training
         if val_acc <= prev_val_acc:
             for param_group in optimizer.param_groups:
-                if param_group['lr'] < 1e-5:
+                if param_group['lr'] < 1e-7:
                     terminate_training = True
                     break
                 param_group['lr'] /= 5
@@ -163,7 +168,7 @@ def train_network():
 
     # Termination message
     if terminate_training:
-        print("\n" + "-"*100 + "\nTraining terminated because the learning rate fell below:  %f" % 1e-5)
+        print("\n" + "-"*100 + "\nTraining terminated because the learning rate fell below:  %f" % 1e-7)
     else:
         print("\n" + "-"*100 + "\nMaximum epochs reached. Finished training !!")
 
@@ -204,11 +209,11 @@ if __name__ == '__main__':
                           help='model name: bilstm / bilstm_pool / bilstm_attn')
     parser.add_argument('--lr', type = float, default = 1e-4,
                           help='Learning rate for training')
-    parser.add_argument('--batch_size', type = int, default = 64,
+    parser.add_argument('--batch_size', type = int, default = 32,
                           help='batch size for training"')
     parser.add_argument('--embed_dim', type = int, default = 300,
                           help='dimension of word embeddings used(GLove)"')
-    parser.add_argument('--lstm_dim', type = int, default = 1024,
+    parser.add_argument('--lstm_dim', type = int, default = 512,
                           help='dimen of hidden unit of LSTM/BiLSTM networks"')
     parser.add_argument('--fc_dim', type = int, default = 512,
                           help='dimen of FC layer"')
@@ -228,7 +233,7 @@ if __name__ == '__main__':
                         help = 'Max epochs to train for')
     parser.add_argument('--val_split', type = int, default = 0.1,
                         help = 'Ratio of training data to be split into validation set')
-    parser.add_argument('--lr_decay_step', type = float, default = 20000,
+    parser.add_argument('--lr_decay_step', type = float, default = 2000,
                         help = 'Number of steps after which learning rate should be decreased')
     parser.add_argument('--lr_decay_factor', type = float, default = 0.2,
                         help = 'Decay of learning rate of the optimizer')
@@ -281,4 +286,4 @@ if __name__ == '__main__':
         print(key + ' : ' + str(value))
     print("\n" + "x"*50)
 
-    # train_network()
+    train_network()

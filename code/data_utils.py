@@ -41,34 +41,6 @@ def binarize_labels(class_list, train, val, test):
     print("\nTotal classes detected in each set: \n Train = {}, \n Val = {}, \n Test= {}".format(len(train[0]), len(val[0]), len(test[0])))
     return train, val, test
 
-def testing_labels(train, val, test):
-    train_list = []
-    val_list = []
-    test_list = []
-
-    for i in range(len(train)):
-        if train[i] not in train_list:
-            train_list.append(train[i])
-
-    for i in range(len(val)):
-        if val[i] not in val_list:
-            val_list.append(val[i])
-
-    for i in range(len(test)):
-        if test[i] not in test_list:
-            test_list.append(test[i])
-
-    if len(train_list) != len(val_list):
-        print("Train and val size do not match..!!")
-
-    if len(train_list) != len(test_list):
-        print("Train and test do not match..!!")
-
-    if len(val_list) != len(test_list):
-        print("Val and Test do not match..!!")
-
-
-
 
 def build_vocab(data, glove_path):
     word_dict = {}
@@ -85,8 +57,8 @@ def build_vocab(data, glove_path):
     #end sentence token
     word_dict['</s>'] = ''
     
-    #padding token for batching
-    word_dict['<p>'] = ''
+    #unkown token for words not in GLOVE
+    word_dict['unk'] = ''
 
     with open(glove_path, encoding="utf8") as f:
         for sents in f:
@@ -94,7 +66,7 @@ def build_vocab(data, glove_path):
             if word in word_dict:
                 embeddings[word] = np.fromstring(emb, sep=' ')
 #                 np.array(list(map(float, emb.split())))
-
+    embeddings['unk'] = np.zeros(300)
     print("\nFound "+ str(len(embeddings)) + " words with Glove embeddings out of "+ str(len(word_dict)) + " total words in corpus.\n")
     return word_dict, embeddings
 
@@ -102,8 +74,11 @@ def build_vocab(data, glove_path):
 def get_batch_from_idx(config, word_emb, batch):
     sen_lens = np.array([len(x) for x in batch])
     max_len = np.max(sen_lens)
-    embedded_sents = np.zeros((max_len, len(batch), config['emb_dim']))
+    embedded_sents = np.zeros((max_len, len(batch), config['embed_dim']))
     for i in range(len(batch)):
         for j in range(len(batch[i])):
-            embedded_sents[j, i, :] = word_emb[batch[i][j]]     # j,i and not i,j since we are working with batch_first = False for LSTMs
-    return torch.from_numpy(embedded_sents).float(), sen_lens
+            if batch[i][j] in word_emb:
+                embedded_sents[j, i, :] = word_emb[batch[i][j]]     # j,i and not i,j since we are working with batch_first = False for LSTMs
+            else:
+                embedded_sents[j, i, :] = word_emb['unk']
+    return torch.from_numpy(embedded_sents).float(), torch.from_numpy(sen_lens)

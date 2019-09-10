@@ -13,7 +13,7 @@ class Doc_Classifier(nn.Module):
 
         self.lstm_dim = config['lstm_dim']
         self.fc_dim = config['fc_dim']
-        self.num_classes = config['n_clases']
+        self.num_classes = config['n_classes']
 
         if config['model_name'] == 'bilstm':
             self.encoder = BiLSTM(config)
@@ -50,7 +50,7 @@ class BiLSTM(nn.Module):
 
         # If not max-pool biLSTM, we extract the h0_l and h0_r from the tuple of tuples 'hn', and concat them to get the final embedding
         if not self.pool:
-            out = torch.cat((hidden_states[0][0], hidden_states[0][1]))
+            out = torch.cat((hidden_states[0][0], hidden_states[0][1]), dim = 1)
 
         # If it is max-pooling biLSTM, set the PADS to very low numbers so that they never get selected in max-pooling
         # Then, max-pool over each dimension(which is now 2D, as 'X' = ALL) to get the final embedding
