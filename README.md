@@ -1,4 +1,4 @@
-# DL4NLP
+# Deep Learning for NLP
 Project for the course Deep Learning for Natural Language Processing
 
 ## Task Description
