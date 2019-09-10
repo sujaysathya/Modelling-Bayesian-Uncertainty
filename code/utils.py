@@ -1,18 +1,19 @@
 import sys, os, time, random
 import numpy as np
 from data_utils import *
+import warnings
+warnings.filterwarnings("ignore")
 
-def prepare_training(config):
+def prepare_training(config, classes):
 
     print("="*80 + "\n\t\t\t\t Preparing Data\n" + "="*80)
     start = time.time()
     # Getting Data Splits: train, test
-    print("\n\n==>> Getting Data splits..")
+    print("\n\n==>> Getting Data splits....")
     train_docs, train_labels, test_docs, test_labels = get_data_splits()
-    # print("\nTotal training docs (before val split): {} \nTotal test docs: {}\n".format(len(train_docs), len(test_docs)) + "-"*50)
 
     # TOKENIZING
-    print("\n==>> Tokenizing each document...")
+    print("\n==>> Tokenizing each document....")
     print("\nTraining set:\n")
     train_data = tokenize(train_docs)
     print("\nTest set:\n")
@@ -20,19 +21,25 @@ def prepare_training(config):
     print("\n" + "-"*50)
 
     # Build Vocabulary and obtain embeddings for each word in Vocabulary
-    print("\n==>> Building Vocabulary and obtaining embeddings...")
+    print("\n==>> Building Vocabulary and obtaining embeddings....")
     vocab, embeddings = build_vocab(train_data, config['glove_path'])
 
     # Splitting training data into train-val split
     train_x, train_y, val_x, val_y = split_train_set(config, train_data, train_labels)
-    print(val_x[0])
-    print(val_y[0])
     print("-"*50 + "\nTotal training docs (after val split): {} \nTotal val docs: {} \nTotal test docs: {}\n".format(len(train_x), len(val_x), len(test_data)))
+
+    # # Testing labels integrity
+    # print("\n==>> Testing labels....")
+    # testing_labels(train_y, val_y, test_labels)
+
+    # Binarizing the labels for NN-training
+    print("\n==>> Binarizing labels for trianing....")
+    train_y, val_y, test_y = binarize_labels(classes, train_y, val_y, test_labels)
 
     end = time.time()
     hours, minutes, seconds = calc_elapsed_time(start, end)
     print("\n"+ "-"*50 + "\nTook  {:0>2} hours: {:0>2} mins: {:05.2f} secs  to Prepare Data\n".format(hours,minutes,seconds))
-    return (train_x, train_y), (val_x, val_y), (test_data, test_labels), vocab, embeddings
+    return train_x, train_y, val_x, val_y, test_data, test_y, vocab, embeddings
 
 
 def calc_elapsed_time(start, end):

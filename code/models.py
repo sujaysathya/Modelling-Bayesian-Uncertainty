@@ -1,8 +1,36 @@
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
+import warnings
+warnings.filterwarnings("ignore")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+class Doc_Classifier(nn.Module):
+    def __init__(self, config):
+        super(Doc_Classifier, self).__init__()
+
+        self.lstm_dim = config['lstm_dim']
+        self.fc_dim = config['fc_dim']
+        self.num_classes = config['n_clases']
+
+        if config['model_name'] == 'bilstm':
+            self.encoder = BiLSTM(config)
+        elif config['model_name'] == 'bilstm_pool':
+            self.encoder = BiLSTM(config, max_pool = True)
+        else:
+            self.encoder = BiLSTM_attn(config)
+
+        self.classifier = nn.Sequential(nn.Linear(2*self.lstm_dim, self.fc_dim),
+                                 nn.Tanh(),
+                                 nn.Linear(self.fc_dim, self.num_classes),
+                                 nn.Sigmoid())
+
+    def forward(self, inp, lens):
+        out = self.encoder(inp, lens)
+        out = self.classifier(out)
+        return out
 
 
 class BiLSTM(nn.Module):
@@ -10,6 +38,7 @@ class BiLSTM(nn.Module):
         super(BiLSTM, self).__init__()
         self.pool = max_pool
         self.encoder = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True)
+
 
     def forward(self, embed, length):
         sorted_len, sorted_idxs = torch.sort(length, descending =True)

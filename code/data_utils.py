@@ -3,6 +3,9 @@ import numpy as np
 import nltk
 from nltk.corpus import reuters
 from tqdm import tqdm
+from sklearn.preprocessing import MultiLabelBinarizer
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def get_data_splits():
@@ -21,7 +24,6 @@ def split_train_set(config, train_data, train_labels):
     val_x = [train_data[i] for i in val_idx]
     train_y = [train_labels[i] for i in train_idx]
     val_y = [train_labels[i] for i in val_idx]
-
     return train_x, train_y, val_x, val_y
 
 def tokenize(dataset):
@@ -29,6 +31,43 @@ def tokenize(dataset):
     for i in tqdm(range(len(dataset))):
         tokenized_docs.append(nltk.word_tokenize(dataset[i]))
     return tokenized_docs
+
+
+def binarize_labels(class_list, train, val, test):
+    labelencoder = MultiLabelBinarizer(classes = class_list)
+    train = labelencoder.fit_transform(train)
+    val = labelencoder.fit_transform(val)
+    test = labelencoder.transform(test)
+    print("\nTotal classes detected in each set: \n Train = {}, \n Val = {}, \n Test= {}".format(len(train[0]), len(val[0]), len(test[0])))
+    return train, val, test
+
+def testing_labels(train, val, test):
+    train_list = []
+    val_list = []
+    test_list = []
+
+    for i in range(len(train)):
+        if train[i] not in train_list:
+            train_list.append(train[i])
+
+    for i in range(len(val)):
+        if val[i] not in val_list:
+            val_list.append(val[i])
+
+    for i in range(len(test)):
+        if test[i] not in test_list:
+            test_list.append(test[i])
+
+    if len(train_list) != len(val_list):
+        print("Train and val size do not match..!!")
+
+    if len(train_list) != len(test_list):
+        print("Train and test do not match..!!")
+
+    if len(val_list) != len(test_list):
+        print("Val and Test do not match..!!")
+
+
 
 
 def build_vocab(data, glove_path):
@@ -39,7 +78,7 @@ def build_vocab(data, glove_path):
         for word in doc:
             if word not in word_dict:
                 word_dict[word] = ''
-        
+
     #start sentence token
     word_dict['<s>'] = ''
     
@@ -48,7 +87,6 @@ def build_vocab(data, glove_path):
     
     #padding token for batching
     word_dict['<p>'] = ''
-    
 
     with open(glove_path, encoding="utf8") as f:
         for sents in f:
@@ -61,13 +99,11 @@ def build_vocab(data, glove_path):
     return word_dict, embeddings
 
 
-def get_batch_from_idx(batch, word_emb, config):
+def get_batch_from_idx(config, word_emb, batch):
     sen_lens = np.array([len(x) for x in batch])
     max_len = np.max(sen_lens)
     embedded_sents = np.zeros((max_len, len(batch), config['emb_dim']))
-
     for i in range(len(batch)):
         for j in range(len(batch[i])):
-            embedded_sents[i, j, :] = word_emb[batch[i][j]]
-
+            embedded_sents[j, i, :] = word_emb[batch[i][j]]     # j,i and not i,j since we are working with batch_first = False for LSTMs
     return torch.from_numpy(embedded_sents).float(), sen_lens
