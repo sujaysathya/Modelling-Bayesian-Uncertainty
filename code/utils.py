@@ -2,6 +2,7 @@ import sys, os, time, random
 import numpy as np
 from data_utils import *
 import warnings
+from sklearn.metrics import f1_score, recall_score, precision_score
 warnings.filterwarnings("ignore")
 
 def prepare_training(config, classes):
@@ -50,8 +51,28 @@ def calc_elapsed_time(start, end):
     return int(hours), int(minutes), seconds
 
 
-def print_stats(epoch, train_loss, train_acc, val_acc, start):
+
+def evaluation_measures(config, preds, labels):
+    # TP += ((preds == labels).float() * (preds == 1).float()).sum(dim=(0,1)).cpu().data.numpy()
+    # FP += ((preds != labels).float() * (preds == 1).float()).sum(dim=(0,1)).cpu().data.numpy()
+    # TN += ((preds == labels).float() * (preds == 0).float()).sum(dim=(0,1)).cpu().data.numpy()
+    # FN += ((preds != labels).float() * (preds == 0).float()).sum(dim=(0,1)).cpu().data.numpy()
+
+    # accuracy_per_label = (TP + TN) / (TP + FP + TN + FN + 1e-10)
+    # balanced_accuracy_per_label = (TP/(TP+FN+1e-10) + TN/(TN+FP+1e-10)) / 2.0
+    # precision_per_label = TP / (TP + FP + 1e-10)
+    # recall_per_label = TP / (TP + FN + 1e-10)
+    # f1_per_label = 2 * precision_per_label * recall_per_label / (1e-5 + precision_per_label + recall_per_label)
+    # labels_per_class = TP + FP + TN + FN
+    # print(accuracy_per_label)
+    f1 = f1_score(labels, preds, average = 'weighted')
+    recall = recall_score(labels, preds, average = 'weighted')
+    precision = precision_score(labels, preds, average = 'weighted')
+    # return TP, FP, TN, FN, torch.mean(torch.tensor(accuracy_per_label)), torch.mean(torch.tensor(balanced_accuracy_per_label)), torch.mean(torch.tensor(precision_per_label)), torch.mean(torch.tensor(recall_per_label)), torch.mean(torch.tensor(f1_per_label))
+    return f1, recall, precision
+
+def print_stats(config, epoch, train_loss, train_f1, val_f1, start):
     end = time.time()
     hours, minutes, seconds = calc_elapsed_time(start, end)
-    print(("Epoch: {}/{},    train_loss: {:.4f},  train_acc = {:.2f}   eval_acc = {:.2f}  | Elapsed Time:  {:0>2}:{:0>2}:{:05.2f}"
-                     .format(epoch, config['max_epoch'], train_loss, train_acc, val_acc, hours,minutes,seconds)))
+    print(("Epoch: {}/{},      train_loss: {:.4f},    train_f1 = {:.4f},      eval_f1 = {:.4f}   |  Elapsed Time:  {:0>2}:{:0>2}:{:05.2f}"
+                     .format(epoch, config['max_epoch'], train_loss, train_f1, val_f1, hours,minutes,seconds)))

@@ -23,7 +23,7 @@ class Doc_Classifier(nn.Module):
             self.encoder = BiLSTM_attn(config)
 
         self.classifier = nn.Sequential(nn.Linear(2*self.lstm_dim, self.fc_dim),
-                                 nn.Tanh(),
+                                 nn.ReLU(),
                                  nn.Linear(self.fc_dim, self.num_classes),
                                  nn.Sigmoid())
 
@@ -37,7 +37,7 @@ class BiLSTM(nn.Module):
     def __init__(self, config, max_pool=False):
         super(BiLSTM, self).__init__()
         self.pool = max_pool
-        self.encoder = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True)
+        self.rnn = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True)
 
 
     def forward(self, embed, length):
@@ -45,7 +45,7 @@ class BiLSTM(nn.Module):
         embed = embed[ : , sorted_idxs, :]
 
         packed_embed = pack_padded_sequence(embed, sorted_len, batch_first = False)
-        all_states, hidden_states = self.encoder(packed_embed)
+        all_states, hidden_states = self.rnn(packed_embed)
         all_states, _ = pad_packed_sequence(all_states, batch_first = False)
 
         # If not max-pool biLSTM, we extract the h0_l and h0_r from the tuple of tuples 'hn', and concat them to get the final embedding
