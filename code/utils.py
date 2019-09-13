@@ -5,6 +5,8 @@ import warnings
 from sklearn.metrics import f1_score, recall_score, precision_score
 warnings.filterwarnings("ignore")
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def prepare_training(config, classes):
 
     print("="*80 + "\n\t\t\t\t Preparing Data\n" + "="*80)
@@ -55,23 +57,11 @@ def calc_elapsed_time(start, end):
 
 
 def evaluation_measures(config, preds, labels):
-    # TP += ((preds == labels).float() * (preds == 1).float()).sum(dim=(0,1)).cpu().data.numpy()
-    # FP += ((preds != labels).float() * (preds == 1).float()).sum(dim=(0,1)).cpu().data.numpy()
-    # TN += ((preds == labels).float() * (preds == 0).float()).sum(dim=(0,1)).cpu().data.numpy()
-    # FN += ((preds != labels).float() * (preds == 0).float()).sum(dim=(0,1)).cpu().data.numpy()
-
-    # accuracy_per_label = (TP + TN) / (TP + FP + TN + FN + 1e-10)
-    # balanced_accuracy_per_label = (TP/(TP+FN+1e-10) + TN/(TN+FP+1e-10)) / 2.0
-    # precision_per_label = TP / (TP + FP + 1e-10)
-    # recall_per_label = TP / (TP + FN + 1e-10)
-    # f1_per_label = 2 * precision_per_label * recall_per_label / (1e-5 + precision_per_label + recall_per_label)
-    # labels_per_class = TP + FP + TN + FN
-    # print(accuracy_per_label)
-    f1 = f1_score(labels, preds, average = 'weighted')
-    recall = recall_score(labels, preds, average = 'weighted')
-    precision = precision_score(labels, preds, average = 'weighted')
-    # return TP, FP, TN, FN, torch.mean(torch.tensor(accuracy_per_label)), torch.mean(torch.tensor(balanced_accuracy_per_label)), torch.mean(torch.tensor(precision_per_label)), torch.mean(torch.tensor(recall_per_label)), torch.mean(torch.tensor(f1_per_label))
+    f1 = f1_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
+    recall = recall_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
+    precision = precision_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
     return f1, recall, precision
+
 
 def print_stats(config, epoch, train_loss, train_f1, val_f1, start):
     end = time.time()

@@ -9,10 +9,11 @@ import numpy as np
 
 import torch
 import torchtext
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 from nltk import word_tokenize
 import nltk
-# nltk.download('punkt')
+nltk.download('punkt')
 from torch.autograd import Variable
 from torchtext.data import Field, BucketIterator
 from torchtext import datasets
@@ -28,20 +29,16 @@ from utils import *
 def eval_network(model, test = False):
     eval_precision, eval_recall, eval_f1 = [],[],[]
     total_iters = int(np.ceil(len(val_y)/config['batch_size'])) if not test else int(np.ceil(len(test_y)/config['batch_size']))
-    # model.eval()
     with torch.no_grad():
         for iters in range(total_iters):
             start_idx = iters*config['batch_size']
             end_idx = start_idx + config['batch_size']
     
             doc_batch, doc_lens = get_batch_from_idx(config, embeddings, val_x[start_idx : end_idx]) if not test else get_batch_from_idx(config, embeddings, test_x[start_idx : end_idx])
-            doc_batch = Variable(doc_batch.to(device))
+            doc_batch = Variable(doc_batch)
             label_batch = Variable(torch.FloatTensor(val_y[start_idx:end_idx])).to(device) if not test else Variable(torch.FloatTensor(test_y[start_idx:end_idx])).to(device)
-            preds = model(doc_batch, doc_lens)
+            preds = model(doc_batch.to(device), doc_lens.to(device))
             preds = (preds>0.5).type(torch.FloatTensor)
-            # accuracy = torch.mean(preds == label_batch, dtype=torch.float32)
-            # accuracy = accuracy_score(label_batch, preds, normalize = True)
-            # TP, FP, TN, FN, accuracy, balanced_accuracy, precision, recall, f1 = evaluation_measures(config, TP, FP, TN, FN, preds, label_batch)
             f1, recall, precision = evaluation_measures(config, preds, label_batch)
             eval_f1.append(f1)
             eval_precision.append(precision)
@@ -49,7 +46,6 @@ def eval_network(model, test = False):
         eval_precision = sum(eval_precision)/len(eval_precision)
         eval_recall = sum(eval_recall)/len(eval_recall)
         eval_f1 = sum(eval_f1)/len(eval_f1)
-    # return eval_accuracy, eval_balanced_accuracy, eval_precision, eval_recall, eval_f1
     return eval_f1, eval_precision, eval_recall
 
 
@@ -64,7 +60,7 @@ def train_network():
     torch.backends.cudnn.benchmark = False
 
     # Initialize the model, optimizer and loss function
-    model = Doc_Classifier(config)
+    model = Doc_Classifier(config).to(device)
     if config['optimizer'] == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
     elif config['optimizer'] == 'SGD':
@@ -98,16 +94,14 @@ def train_network():
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
     for epoch in range(start_epoch, config['max_epoch']+1):
         model.train()
-        # train_f1_score, train_recall_score, train_precision_score = 0,0,0
-        # TP, FP, TN, FN = 0, 0, 0, 0
 
         # Shuffling data for batching in each epoch
         permute_idxs = np.random.permutation(len(train_y))
         train_data = [train_x[i] for i in permute_idxs]
         train_labels = [train_y[i] for i in permute_idxs]
 
-        train_data = train_x[:1000]
-        train_labels = train_y[:1000]
+        #train_data = train_x[:1000]
+        #train_labels = train_y[:1000]
 
         max_iters = int(np.ceil(len(train_labels)/config['batch_size']))
         for iters in range(max_iters):
@@ -118,10 +112,10 @@ def train_network():
             end_idx = start_idx + config['batch_size']
 
             doc_batch, doc_lens = get_batch_from_idx(config, embeddings, train_data[start_idx : end_idx])
-            doc_batch = Variable(doc_batch.to(device))
+            doc_batch = Variable(doc_batch)
             label_batch = Variable(torch.FloatTensor(train_labels[start_idx:end_idx])).to(device)
 
-            preds = model(doc_batch, doc_lens)
+            preds = model(doc_batch.to(device), doc_lens.to(device))
             loss = criterion(preds, label_batch)
 
             optimizer.zero_grad()
@@ -130,18 +124,12 @@ def train_network():
             optimizer.step()
 
             preds = (preds>0.5).type(torch.FloatTensor)
-            # print(preds[0])
-            # print(label_batch[0])
-            # accuracy = torch.mean(preds == label_batch, dtype=torch.float32)
-            # accuracy = accuracy_score(label_batch, preds, normalize =True)
-            # TP, FP, TN, FN, accuracy, balanced_accuracy, precision, recall, f1 = evaluation_measures(config, TP, FP, TN, FN, preds, label_batch)
             train_f1, train_recall, train_precision = evaluation_measures(config, preds, label_batch)
             train_f1_score.append(train_f1)
             train_recall_score.append(train_recall)
             train_precision_score.append(train_precision)
             train_loss.append(loss.detach().item())
-            # train_acc += accuracy
-            if iters%10 == 0:
+            if iters%100 == 0:
                 writer.add_scalar('Train/loss', sum(train_loss)/len(train_loss), ((iters+1)+ total_iters))
                 writer.add_scalar('Train/precision', sum(train_precision_score)/len(train_precision_score), ((iters+1)+total_iters))
                 writer.add_scalar('Train/recall', sum(train_recall_score)/len(train_recall_score), ((iters+1)+total_iters))
@@ -154,15 +142,8 @@ def train_network():
                     writer.add_histogram('grads/'+ name, param.grad.data.view(-1), global_step = ((iters+1)+ total_iters))
 
         total_iters += iters
-        # train_loss = train_loss/iters
-        # train_acc = (train_acc/iters)*100
-        # train_f1_score/=iters
-        # train_recall_score/=iters
-        # train_precision_score/=iters
-
 
         # Evaluate on test set
-        # eval_accuracy, eval_balanced_accuracy, eval_precision, eval_recall, eval_f1 = eval_network(model)
         eval_f1, eval_precision, eval_recall = eval_network(model)
 
         # print stats
@@ -192,9 +173,8 @@ def train_network():
         # If validation accuracy does not improve, divide the learning rate by 5 and
         # if learning rate falls below 1e-5 terminate training
         if eval_f1 <= prev_val_f1:
-        # if epoch % 10 ==0 and epoch>0:
             for param_group in optimizer.param_groups:
-                if param_group['lr'] < 1e-7:
+                if param_group['lr'] < config['lr_cut_off']:
                     terminate_training = True
                     break
                 param_group['lr'] /= 5
@@ -206,7 +186,7 @@ def train_network():
 
     # Termination message
     if terminate_training:
-        print("\n" + "-"*100 + "\nTraining terminated because the learning rate fell below:  {}" .format(1e-7))
+        print("\n" + "-"*100 + "\nTraining terminated because the learning rate fell below:  {}" .format(config['lr_cut_off']))
     else:
         print("\n" + "-"*100 + "\nMaximum epochs reached. Finished training !!")
 
@@ -218,8 +198,6 @@ def train_network():
     else:
         raise ValueError("No Saved model state_dict found for the chosen model...!!! \nAborting evaluation on test set...".format(config['model_name']))
     test_f1, test_precision, test_recall = eval_network(model, test = True)
-    # print("\nTest accuracy of best model = {:.2f}%".format(test_accuracy))
-    # print("\nTest Balanced accuracy of best model = {:.2f}%".format(test_balanced_accuracy))
     print("\nTest precision of best model = {:.2f}".format(test_precision*100))
     print("\nTest recall of best model = {:.2f}".format(test_recall*100))
     print("\nTest f1 of best model = {:.2f}".format(test_f1*100))
@@ -245,7 +223,7 @@ if __name__ == '__main__':
                        help = 'saved model name')
 
     # Training Params
-    parser.add_argument('--model_name', type = str, default = 'bilstm_pool',
+    parser.add_argument('--model_name', type = str, default = 'bilstm',
                           help='model name: bilstm / bilstm_pool / bilstm_attn')
     parser.add_argument('--lr', type = float, default = 0.01,
                           help='Learning rate for training')
@@ -269,7 +247,7 @@ if __name__ == '__main__':
                         help = 'weight decay for optimizer')
     parser.add_argument('--momentum', type = float, default = 0.8,
                         help = 'Momentum for optimizer')
-    parser.add_argument('--max_epoch', type = int, default = 20,
+    parser.add_argument('--max_epoch', type = int, default = 50,
                         help = 'Max epochs to train for')
     parser.add_argument('--val_split', type = int, default = 0.1,
                         help = 'Ratio of training data to be split into validation set')
@@ -277,6 +255,8 @@ if __name__ == '__main__':
                         help = 'Number of steps after which learning rate should be decreased')
     parser.add_argument('--lr_decay_factor', type = float, default = 0.2,
                         help = 'Decay of learning rate of the optimizer')
+    parser.add_argument('--lr_cut_off', type = float, default = 1e-7,
+                        help = 'Lr lower bound to stop training')
 
     args, unparsed = parser.parse_known_args()
     config = args.__dict__
