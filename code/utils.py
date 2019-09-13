@@ -28,6 +28,8 @@ def prepare_training(config, classes):
     # Splitting training data into train-val split
     train_x, train_y, val_x, val_y = split_train_set(config, train_data, train_labels)
     print("-"*50 + "\nTotal training docs (after val split): {} \nTotal val docs: {} \nTotal test docs: {}\n".format(len(train_x), len(val_x), len(test_data)))
+    print("\nExample train doc: \n{}\n".format(train_x[0]))
+    print("\nExample train doc's label: \n{}\n".format(train_y[0]))
 
     # # Testing labels integrity
     # print("\n==>> Testing labels....")

@@ -26,16 +26,15 @@ from utils import *
 
 
 def eval_network(model, test = False):
-    eval_accuracy, eval_balanced_accuracy, eval_precision, eval_recall, eval_f1 = 0,0,0,0,0
+    eval_precision, eval_recall, eval_f1 = [],[],[]
     total_iters = int(np.ceil(len(val_y)/config['batch_size'])) if not test else int(np.ceil(len(test_y)/config['batch_size']))
-    model.eval()
-    TP, FP, TN, FN = 0,0,0,0
+    # model.eval()
     with torch.no_grad():
         for iters in range(total_iters):
             start_idx = iters*config['batch_size']
             end_idx = start_idx + config['batch_size']
     
-            doc_batch, doc_lens = get_batch_from_idx(config, embeddings, val_x[start_idx : end_idx]) if not test else get_batch_from_idx(config, embeddings, test_y[start_idx : end_idx])
+            doc_batch, doc_lens = get_batch_from_idx(config, embeddings, val_x[start_idx : end_idx]) if not test else get_batch_from_idx(config, embeddings, test_x[start_idx : end_idx])
             doc_batch = Variable(doc_batch.to(device))
             label_batch = Variable(torch.FloatTensor(val_y[start_idx:end_idx])).to(device) if not test else Variable(torch.FloatTensor(test_y[start_idx:end_idx])).to(device)
             preds = model(doc_batch, doc_lens)
@@ -44,19 +43,12 @@ def eval_network(model, test = False):
             # accuracy = accuracy_score(label_batch, preds, normalize = True)
             # TP, FP, TN, FN, accuracy, balanced_accuracy, precision, recall, f1 = evaluation_measures(config, TP, FP, TN, FN, preds, label_batch)
             f1, recall, precision = evaluation_measures(config, preds, label_batch)
-            eval_f1+=f1
-            eval_precision+=precision
-            eval_recall+=recall
-            # eval_accuracy+= accuracy
-            # eval_balanced_accuracy+= balanced_accuracy
-            # eval_precision+= precision
-            # eval_recall+= recall
-            # eval_f1+=f1
-        # eval_accuracy/=iters
-        # eval_balanced_accuracy/=iters
-        eval_precision/=iters
-        eval_recall/=iters
-        eval_f1/=iters
+            eval_f1.append(f1)
+            eval_precision.append(precision)
+            eval_recall.append(recall)
+        eval_precision = sum(eval_precision)/len(eval_precision)
+        eval_recall = sum(eval_recall)/len(eval_recall)
+        eval_f1 = sum(eval_f1)/len(eval_f1)
     # return eval_accuracy, eval_balanced_accuracy, eval_precision, eval_recall, eval_f1
     return eval_f1, eval_precision, eval_recall
 
@@ -100,25 +92,26 @@ def train_network():
     best_val_f1 = 0
     prev_val_f1 = 0
     total_iters = 0
-    avg_grads = []
+    train_loss = []
+    train_f1_score, train_recall_score, train_precision_score = [], [], []
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
     for epoch in range(start_epoch, config['max_epoch']+1):
         model.train()
-        train_loss = 0
-        train_acc = 0
-        TP, FP, TN, FN = 0, 0, 0, 0
+        # train_f1_score, train_recall_score, train_precision_score = 0,0,0
+        # TP, FP, TN, FN = 0, 0, 0, 0
 
         # Shuffling data for batching in each epoch
         permute_idxs = np.random.permutation(len(train_y))
         train_data = [train_x[i] for i in permute_idxs]
         train_labels = [train_y[i] for i in permute_idxs]
 
-        train_data = train_x[:200][20:100]
-        train_labels = train_y[:200][20:100]
+        train_data = train_x[:1000]
+        train_labels = train_y[:1000]
 
         max_iters = int(np.ceil(len(train_labels)/config['batch_size']))
         for iters in range(max_iters):
+            model.train()
             # lr_scheduler.step()
 
             start_idx = iters*config['batch_size']
@@ -143,15 +136,16 @@ def train_network():
             # accuracy = accuracy_score(label_batch, preds, normalize =True)
             # TP, FP, TN, FN, accuracy, balanced_accuracy, precision, recall, f1 = evaluation_measures(config, TP, FP, TN, FN, preds, label_batch)
             train_f1, train_recall, train_precision = evaluation_measures(config, preds, label_batch)
-            train_loss += loss.detach().item()
+            train_f1_score.append(train_f1)
+            train_recall_score.append(train_recall)
+            train_precision_score.append(train_precision)
+            train_loss.append(loss.detach().item())
             # train_acc += accuracy
-            if iters%1 == 0:
-                writer.add_scalar('Train/loss', train_loss/(iters+1), ((iters+1)+ total_iters))
-                # writer.add_scalar('Train/iters/accuracy', train_acc/(iters+1)*100, ((iters+1)+ total_iters))
-                # writer.add_scalar('Train/accuracy', accuracy/(iters+1), ((iters+1)+total_iters))
-                writer.add_scalar('Train/precision', train_precision/(iters+1), ((iters+1)+total_iters))
-                writer.add_scalar('Train/recall', train_recall/(iters+1), ((iters+1)+total_iters))
-                writer.add_scalar('Train/f1', train_f1/(iters+1), ((iters+1)+total_iters))
+            if iters%10 == 0:
+                writer.add_scalar('Train/loss', sum(train_loss)/len(train_loss), ((iters+1)+ total_iters))
+                writer.add_scalar('Train/precision', sum(train_precision_score)/len(train_precision_score), ((iters+1)+total_iters))
+                writer.add_scalar('Train/recall', sum(train_recall_score)/len(train_recall_score), ((iters+1)+total_iters))
+                writer.add_scalar('Train/f1', sum(train_f1_score)/len(train_f1_score), ((iters+1)+total_iters))
 
                 for name, param in model.named_parameters():
                     if not param.requires_grad:
@@ -160,19 +154,23 @@ def train_network():
                     writer.add_histogram('grads/'+ name, param.grad.data.view(-1), global_step = ((iters+1)+ total_iters))
 
         total_iters += iters
-        train_loss = train_loss/iters
-        train_acc = (train_acc/iters)*100
+        # train_loss = train_loss/iters
+        # train_acc = (train_acc/iters)*100
+        # train_f1_score/=iters
+        # train_recall_score/=iters
+        # train_precision_score/=iters
+
 
         # Evaluate on test set
         # eval_accuracy, eval_balanced_accuracy, eval_precision, eval_recall, eval_f1 = eval_network(model)
         eval_f1, eval_precision, eval_recall = eval_network(model)
 
         # print stats
-        print_stats(config, epoch, train_loss, train_f1, eval_f1, start)
+        print_stats(config, epoch, sum(train_loss)/len(train_loss), sum(train_f1_score)/len(train_f1_score), eval_f1, start)
 
-        # writer.add_scalar('Train/epochs/loss', train_loss, epoch)
-        # writer.add_scalar('Train/epochs/accuracy', train_acc, epoch)
         writer.add_scalar('Validation/f1', eval_f1, epoch)
+        writer.add_scalar('Validation/recall', eval_recall, epoch)
+        writer.add_scalar('Validation/precision', eval_precision, epoch)
 
         for name, param in model.named_parameters():
             if not param.requires_grad:
@@ -196,7 +194,7 @@ def train_network():
         if eval_f1 <= prev_val_f1:
         # if epoch % 10 ==0 and epoch>0:
             for param_group in optimizer.param_groups:
-                if param_group['lr'] < 1e-5:
+                if param_group['lr'] < 1e-7:
                     terminate_training = True
                     break
                 param_group['lr'] /= 5
@@ -208,7 +206,7 @@ def train_network():
 
     # Termination message
     if terminate_training:
-        print("\n" + "-"*100 + "\nTraining terminated because the learning rate fell below:  %f" % 1e-7)
+        print("\n" + "-"*100 + "\nTraining terminated because the learning rate fell below:  {}" .format(1e-7))
     else:
         print("\n" + "-"*100 + "\nMaximum epochs reached. Finished training !!")
 
@@ -222,9 +220,9 @@ def train_network():
     test_f1, test_precision, test_recall = eval_network(model, test = True)
     # print("\nTest accuracy of best model = {:.2f}%".format(test_accuracy))
     # print("\nTest Balanced accuracy of best model = {:.2f}%".format(test_balanced_accuracy))
-    print("\nTest precision of best model = {:.2f}%".format(test_precision))
-    print("\nTest recall of best model = {:.2f}%".format(test_recall))
-    print("\nTest f1 of best model = {:.2f}%".format(test_f1))
+    print("\nTest precision of best model = {:.2f}".format(test_precision*100))
+    print("\nTest recall of best model = {:.2f}".format(test_recall*100))
+    print("\nTest f1 of best model = {:.2f}".format(test_f1*100))
 
     writer.close()
     return None
@@ -257,7 +255,7 @@ if __name__ == '__main__':
                           help='dimension of word embeddings used(GLove)"')
     parser.add_argument('--lstm_dim', type = int, default = 512,
                           help='dimen of hidden unit of LSTM/BiLSTM networks"')
-    parser.add_argument('--fc_dim', type = int, default = 512,
+    parser.add_argument('--fc_dim', type = int, default = 256,
                           help='dimen of FC layer"')
     parser.add_argument('--n_classes', type = int, default = 90,
                           help='number of classes"')

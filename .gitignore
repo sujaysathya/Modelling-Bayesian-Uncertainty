@@ -1,2 +1,3 @@
 data/glove/glove.840B.300d.txt
 code/vis_checkpoints/*
+code/model_checkpoints/*
