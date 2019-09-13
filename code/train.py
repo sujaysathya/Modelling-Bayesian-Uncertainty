@@ -27,7 +27,7 @@ from utils import *
 
 
 def eval_network(model, test = False):
-    eval_precision, eval_recall, eval_f1 = [],[],[]
+    eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
     total_iters = int(np.ceil(len(val_y)/config['batch_size'])) if not test else int(np.ceil(len(test_y)/config['batch_size']))
     with torch.no_grad():
         for iters in range(total_iters):
@@ -39,14 +39,16 @@ def eval_network(model, test = False):
             label_batch = Variable(torch.FloatTensor(val_y[start_idx:end_idx])).to(device) if not test else Variable(torch.FloatTensor(test_y[start_idx:end_idx])).to(device)
             preds = model(doc_batch.to(device), doc_lens.to(device))
             preds = (preds>0.5).type(torch.FloatTensor)
-            f1, recall, precision = evaluation_measures(config, preds, label_batch)
+            f1, recall, precision, accuracy = evaluation_measures(config, preds, label_batch)
             eval_f1.append(f1)
             eval_precision.append(precision)
             eval_recall.append(recall)
+            eval_accuracy.append(accuracy)
         eval_precision = sum(eval_precision)/len(eval_precision)
         eval_recall = sum(eval_recall)/len(eval_recall)
         eval_f1 = sum(eval_f1)/len(eval_f1)
-    return eval_f1, eval_precision, eval_recall
+        eval_accuracy = sum(eval_accuracy)/len(eval_accuracy)
+    return eval_f1, eval_precision, eval_recall, eval_accuracy
 
 
 
@@ -89,7 +91,7 @@ def train_network():
     prev_val_f1 = 0
     total_iters = 0
     train_loss = []
-    train_f1_score, train_recall_score, train_precision_score = [], [], []
+    train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
     for epoch in range(start_epoch, config['max_epoch']+1):
@@ -124,8 +126,9 @@ def train_network():
             optimizer.step()
 
             preds = (preds>0.5).type(torch.FloatTensor)
-            train_f1, train_recall, train_precision = evaluation_measures(config, preds, label_batch)
+            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, preds, label_batch)
             train_f1_score.append(train_f1)
+            train_accuracy_score.append(train_accuracy)
             train_recall_score.append(train_recall)
             train_precision_score.append(train_precision)
             train_loss.append(loss.detach().item())
@@ -134,6 +137,7 @@ def train_network():
                 writer.add_scalar('Train/precision', sum(train_precision_score)/len(train_precision_score), ((iters+1)+total_iters))
                 writer.add_scalar('Train/recall', sum(train_recall_score)/len(train_recall_score), ((iters+1)+total_iters))
                 writer.add_scalar('Train/f1', sum(train_f1_score)/len(train_f1_score), ((iters+1)+total_iters))
+                writer.add_scalar('Train/accuracy', sum(train_accuracy_score)/len(train_accuracy_score), ((iters+1)+total_iters))
 
                 for name, param in model.named_parameters():
                     if not param.requires_grad:
@@ -144,14 +148,15 @@ def train_network():
         total_iters += iters
 
         # Evaluate on test set
-        eval_f1, eval_precision, eval_recall = eval_network(model)
+        eval_f1, eval_precision, eval_recall, eval_accuracy = eval_network(model)
 
         # print stats
-        print_stats(config, epoch, sum(train_loss)/len(train_loss), sum(train_f1_score)/len(train_f1_score), eval_f1, start)
+        print_stats(config, epoch, sum(train_accuracy_score)/len(train_accuracy_score), sum(train_loss)/len(train_loss), sum(train_f1_score)/len(train_f1_score), eval_accuracy, eval_f1, start)
 
         writer.add_scalar('Validation/f1', eval_f1, epoch)
         writer.add_scalar('Validation/recall', eval_recall, epoch)
         writer.add_scalar('Validation/precision', eval_precision, epoch)
+        writer.add_scalar('Validation/accuracy', eval_accuracy, epoch)
 
         for name, param in model.named_parameters():
             if not param.requires_grad:
@@ -197,10 +202,11 @@ def train_network():
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
         raise ValueError("No Saved model state_dict found for the chosen model...!!! \nAborting evaluation on test set...".format(config['model_name']))
-    test_f1, test_precision, test_recall = eval_network(model, test = True)
+    test_f1, test_precision, test_recall, test_accuracy = eval_network(model, test = True)
     print("\nTest precision of best model = {:.2f}".format(test_precision*100))
     print("\nTest recall of best model = {:.2f}".format(test_recall*100))
     print("\nTest f1 of best model = {:.2f}".format(test_f1*100))
+    print("\nTest accuracy of best model = {:.2f}".format(test_accuracy*100))
 
     writer.close()
     return None

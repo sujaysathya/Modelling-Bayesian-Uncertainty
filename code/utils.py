@@ -2,7 +2,7 @@ import sys, os, time, random
 import numpy as np
 from data_utils import *
 import warnings
-from sklearn.metrics import f1_score, recall_score, precision_score
+from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
 warnings.filterwarnings("ignore")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -60,11 +60,12 @@ def evaluation_measures(config, preds, labels):
     f1 = f1_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
     recall = recall_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
     precision = precision_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
-    return f1, recall, precision
+    accuracy = accuracy_score(labels.to('cpu'), preds.to('cpu'), normalize= True)
+    return f1, recall, precision, accuracy
 
 
-def print_stats(config, epoch, train_loss, train_f1, val_f1, start):
+def print_stats(config, epoch, train_acc, train_loss, train_f1, val_acc, val_f1, start):
     end = time.time()
     hours, minutes, seconds = calc_elapsed_time(start, end)
-    print(("Epoch: {}/{},      train_loss: {:.4f},    train_f1 = {:.4f},      eval_f1 = {:.4f}   |  Elapsed Time:  {:0>2}:{:0>2}:{:05.2f}"
-                     .format(epoch, config['max_epoch'], train_loss, train_f1, val_f1, hours,minutes,seconds)))
+    print(("Epoch: {}/{},      train_loss: {:.4f},    train_Acc = {:.4f},     train_f1 = {:.4f},      eval_acc = {:.4f},        eval_f1 = {:.4f}   |  Elapsed Time:  {:0>2}:{:0>2}:{:05.2f}"
+                     .format(epoch, config['max_epoch'], train_loss, train_acc, train_f1, val_acc, val_f1, hours,minutes,seconds)))
