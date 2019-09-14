@@ -28,12 +28,20 @@ from utils import *
 
 def eval_network(model, test = False):
     eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
+<<<<<<< HEAD
     batch_loader = dev_loader if not test else test_loader
+=======
+    total_iters = int(np.ceil(len(val_y)/config['batch_size'])) if not test else int(np.ceil(len(test_y)/config['batch_size']))
+>>>>>>> 9397ec2b3eea956358506145856b7271bc5d4bdb
     with torch.no_grad():
         for iters, (text, label) in enumerate(batch_loader):
             preds = model(text[0].to(device), text[1].to(device))
             preds = (preds>0.5).type(torch.FloatTensor)
+<<<<<<< HEAD
             f1, recall, precision, accuracy = evaluation_measures(config, preds, label)
+=======
+            f1, recall, precision, accuracy = evaluation_measures(config, preds, label_batch)
+>>>>>>> 9397ec2b3eea956358506145856b7271bc5d4bdb
             eval_f1.append(f1)
             eval_precision.append(precision)
             eval_recall.append(recall)
@@ -105,7 +113,11 @@ def train_network():
             optimizer.step()
 
             preds = (preds>0.5).type(torch.FloatTensor)
+<<<<<<< HEAD
             train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, preds, label)
+=======
+            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, preds, label_batch)
+>>>>>>> 9397ec2b3eea956358506145856b7271bc5d4bdb
             train_f1_score.append(train_f1)
             train_accuracy_score.append(train_accuracy)
             train_recall_score.append(train_recall)
