@@ -102,7 +102,6 @@ class Reuters(TabularDataset):
     LABEL = Field(sequential=False, use_vocab=False, batch_first=True, preprocessing=process_labels)
     NUM_CLASSES = 90
 
-
     @staticmethod
     def sort_key(ex):
         return len(ex.text)
@@ -127,12 +126,6 @@ class Reuters(TabularDataset):
          vectors: custom vectors - either predefined torchtext vectors or your own custom Vector classes
          unk_init: function used to generate vector for OOV words
         """
-        # if config['model_name'] == 'han':
-        #     NESTING = Field(sequential = True, tokenize=clean_string, lower=True, use_vocab=True, batch_first=False)
-        #     TEXT = NestedField(NESTING, tokenize=split_sents)
-        # else:
-        #     TEXT = Field(sequential = True, tokenize=clean_string, lower=True, use_vocab=True, batch_first=False, include_lengths = True)
-        # LABEL = Field(sequential=False, use_vocab=True, pad_token=None, unk_token=None, batch_first=False, preprocessing= process_labels)
 
         # Getting Data Splits: train, dev, test
         print("\n\n==>> Loading Data splits and tokenizing each document....")

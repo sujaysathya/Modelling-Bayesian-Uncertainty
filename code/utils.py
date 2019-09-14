@@ -3,10 +3,7 @@ import numpy as np
 from data_utils import *
 import warnings
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
-<<<<<<< HEAD
 from torchtext.data import Field, Dataset, NestedField, TabularDataset, BucketIterator
-=======
->>>>>>> 9397ec2b3eea956358506145856b7271bc5d4bdb
 warnings.filterwarnings("ignore")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -79,9 +76,5 @@ def evaluation_measures(config, preds, labels):
 def print_stats(config, epoch, train_acc, train_loss, train_f1, val_acc, val_f1, start):
     end = time.time()
     hours, minutes, seconds = calc_elapsed_time(start, end)
-<<<<<<< HEAD
     print(("Epoch: {}/{},     train_loss: {:.4f},    train_Acc = {:.4f},    train_f1 = {:.4f},     eval_acc = {:.4f},       eval_f1 = {:.4f}   |  Elapsed Time:  {:0>2}:{:0>2}:{:05.2f}"
-=======
-    print(("Epoch: {}/{},      train_loss: {:.4f},    train_Acc = {:.4f},     train_f1 = {:.4f},      eval_acc = {:.4f},        eval_f1 = {:.4f}   |  Elapsed Time:  {:0>2}:{:0>2}:{:05.2f}"
->>>>>>> 9397ec2b3eea956358506145856b7271bc5d4bdb
                      .format(epoch, config['max_epoch'], train_loss, train_acc, train_f1, val_acc, val_f1, hours,minutes,seconds)))
