@@ -9,8 +9,8 @@ import numpy as np
 
 import torch
 import torchtext
-#from torch.utils.tensorboard import SummaryWriter
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+# from tensorboardX import SummaryWriter
 from nltk import word_tokenize
 import nltk
 nltk.download('punkt')
@@ -27,26 +27,22 @@ from utils import *
 
 
 def eval_network(model, test = False):
-    eval_precision, eval_recall, eval_f1 = [],[],[]
-    total_iters = int(np.ceil(len(val_y)/config['batch_size'])) if not test else int(np.ceil(len(test_y)/config['batch_size']))
+    eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
+    batch_loader = dev_loader if not test else test_loader
     with torch.no_grad():
-        for iters in range(total_iters):
-            start_idx = iters*config['batch_size']
-            end_idx = start_idx + config['batch_size']
-    
-            doc_batch, doc_lens = get_batch_from_idx(config, embeddings, val_x[start_idx : end_idx]) if not test else get_batch_from_idx(config, embeddings, test_x[start_idx : end_idx])
-            doc_batch = Variable(doc_batch)
-            label_batch = Variable(torch.FloatTensor(val_y[start_idx:end_idx])).to(device) if not test else Variable(torch.FloatTensor(test_y[start_idx:end_idx])).to(device)
-            preds = model(doc_batch.to(device), doc_lens.to(device))
+        for iters, (text, label) in enumerate(batch_loader):
+            preds = model(text[0].to(device), text[1].to(device))
             preds = (preds>0.5).type(torch.FloatTensor)
-            f1, recall, precision = evaluation_measures(config, preds, label_batch)
+            f1, recall, precision, accuracy = evaluation_measures(config, preds, label)
             eval_f1.append(f1)
             eval_precision.append(precision)
             eval_recall.append(recall)
+            eval_accuracy.append(accuracy)
         eval_precision = sum(eval_precision)/len(eval_precision)
         eval_recall = sum(eval_recall)/len(eval_recall)
         eval_f1 = sum(eval_f1)/len(eval_f1)
-    return eval_f1, eval_precision, eval_recall
+        eval_accuracy = sum(eval_accuracy)/len(eval_accuracy)
+    return eval_f1, eval_precision, eval_recall, eval_accuracy
 
 
 
@@ -60,7 +56,7 @@ def train_network():
     torch.backends.cudnn.benchmark = False
 
     # Initialize the model, optimizer and loss function
-    model = Doc_Classifier(config).to(device)
+    model = Doc_Classifier(config, pre_trained_embeds = TEXT.vocab.vectors).to(device)
     if config['optimizer'] == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
     elif config['optimizer'] == 'SGD':
@@ -85,38 +81,23 @@ def train_network():
         print(model)
 
     start = time.time()
-    best_val_f1 = 0
-    prev_val_f1 = 0
+    best_val_acc = 0
+    prev_val_acc = 0
     total_iters = 0
     train_loss = []
-    train_f1_score, train_recall_score, train_precision_score = [], [], []
+    train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
     for epoch in range(start_epoch, config['max_epoch']+1):
         model.train()
 
-        # Shuffling data for batching in each epoch
-        permute_idxs = np.random.permutation(len(train_y))
-        train_data = [train_x[i] for i in permute_idxs]
-        train_labels = [train_y[i] for i in permute_idxs]
-
-        #train_data = train_x[:1000]
-        #train_labels = train_y[:1000]
-
-        max_iters = int(np.ceil(len(train_labels)/config['batch_size']))
-        for iters in range(max_iters):
+        for iters, (text, label) in enumerate(train_loader):
             model.train()
             # lr_scheduler.step()
-
-            start_idx = iters*config['batch_size']
-            end_idx = start_idx + config['batch_size']
-
-            doc_batch, doc_lens = get_batch_from_idx(config, embeddings, train_data[start_idx : end_idx])
-            doc_batch = Variable(doc_batch)
-            label_batch = Variable(torch.FloatTensor(train_labels[start_idx:end_idx])).to(device)
-
-            preds = model(doc_batch.to(device), doc_lens.to(device))
-            loss = criterion(preds, label_batch)
+            preds = model(text[0].to(device), text[1].to(device))
+            loss = criterion(preds, label.float())
+            print("preds shape = ", preds.shape)
+            print("labels shape = ", label.shape)
 
             optimizer.zero_grad()
             loss.backward()
@@ -124,8 +105,9 @@ def train_network():
             optimizer.step()
 
             preds = (preds>0.5).type(torch.FloatTensor)
-            train_f1, train_recall, train_precision = evaluation_measures(config, preds, label_batch)
+            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, preds, label)
             train_f1_score.append(train_f1)
+            train_accuracy_score.append(train_accuracy)
             train_recall_score.append(train_recall)
             train_precision_score.append(train_precision)
             train_loss.append(loss.detach().item())
@@ -134,6 +116,7 @@ def train_network():
                 writer.add_scalar('Train/precision', sum(train_precision_score)/len(train_precision_score), ((iters+1)+total_iters))
                 writer.add_scalar('Train/recall', sum(train_recall_score)/len(train_recall_score), ((iters+1)+total_iters))
                 writer.add_scalar('Train/f1', sum(train_f1_score)/len(train_f1_score), ((iters+1)+total_iters))
+                writer.add_scalar('Train/accuracy', sum(train_accuracy_score)/len(train_accuracy_score), ((iters+1)+total_iters))
 
                 for name, param in model.named_parameters():
                     if not param.requires_grad:
@@ -144,14 +127,15 @@ def train_network():
         total_iters += iters
 
         # Evaluate on test set
-        eval_f1, eval_precision, eval_recall = eval_network(model)
+        eval_f1, eval_precision, eval_recall, eval_accuracy = eval_network(model)
 
         # print stats
-        print_stats(config, epoch, sum(train_loss)/len(train_loss), sum(train_f1_score)/len(train_f1_score), eval_f1, start)
+        print_stats(config, epoch, sum(train_accuracy_score)/len(train_accuracy_score), sum(train_loss)/len(train_loss), sum(train_f1_score)/len(train_f1_score), eval_accuracy, eval_f1, start)
 
         writer.add_scalar('Validation/f1', eval_f1, epoch)
         writer.add_scalar('Validation/recall', eval_recall, epoch)
         writer.add_scalar('Validation/precision', eval_precision, epoch)
+        writer.add_scalar('Validation/accuracy', eval_accuracy, epoch)
 
         for name, param in model.named_parameters():
             if not param.requires_grad:
@@ -159,9 +143,9 @@ def train_network():
             writer.add_histogram('epochs/' + name, param.data.view(-1), global_step= epoch)
 
         # Save model checkpoints for best model
-        if eval_f1 > best_val_f1:
+        if eval_accuracy > best_val_acc:
             print("New High Score! Saving model...\n")
-            best_val_f1 = eval_f1
+            best_val_acc = eval_accuracy
             # Save the state and the vocabulary
             torch.save({
                 'epoch': epoch,
@@ -172,7 +156,7 @@ def train_network():
 
         # If validation accuracy does not improve, divide the learning rate by 5 and
         # if learning rate falls below 1e-5 terminate training
-        if eval_f1 <= prev_val_f1:
+        if eval_accuracy <= prev_val_acc:
             for param_group in optimizer.param_groups:
                 if param_group['lr'] < config['lr_cut_off']:
                     terminate_training = True
@@ -180,7 +164,7 @@ def train_network():
                 param_group['lr'] /= 5
                 print("Learning rate changed to :  {}\n".format(param_group['lr']))
 
-        prev_val_f1 = eval_f1
+        prev_val_acc = eval_accuracy
         if terminate_training:
             break
 
@@ -197,10 +181,11 @@ def train_network():
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
         raise ValueError("No Saved model state_dict found for the chosen model...!!! \nAborting evaluation on test set...".format(config['model_name']))
-    test_f1, test_precision, test_recall = eval_network(model, test = True)
+    test_f1, test_precision, test_recall, test_accuracy = eval_network(model, test = True)
     print("\nTest precision of best model = {:.2f}".format(test_precision*100))
     print("\nTest recall of best model = {:.2f}".format(test_recall*100))
     print("\nTest f1 of best model = {:.2f}".format(test_f1*100))
+    print("\nTest accuracy of best model = {:.2f}".format(test_accuracy*100))
 
     writer.close()
     return None
@@ -211,7 +196,7 @@ def train_network():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # Required Paths
-    parser.add_argument('--reuters_path', type = str, default = '../data/reuters',
+    parser.add_argument('--reuters_path', type = str, default = '../data',
                           help='path to reuters data (raw data)')
     parser.add_argument('--glove_path', type = str, default = '../data/glove/glove.840B.300d.txt',
                           help='path for Glove embeddings (850B, 300D)')
@@ -223,8 +208,8 @@ if __name__ == '__main__':
                        help = 'saved model name')
 
     # Training Params
-    parser.add_argument('--model_name', type = str, default = 'bilstm',
-                          help='model name: bilstm / bilstm_pool / bilstm_attn')
+    parser.add_argument('--model_name', type = str, default = 'bilstm_pool',
+                          help='model name: bilstm / bilstm_pool / han / cnn')
     parser.add_argument('--lr', type = float, default = 0.01,
                           help='Learning rate for training')
     parser.add_argument('--batch_size', type = int, default = 32,
@@ -290,8 +275,8 @@ if __name__ == '__main__':
         os.makedirs(model_path)
     else:
         print("\nModel save path checked..")
-    if config['model_name'] not in ['bilstm', 'bilstm_pool', 'bilstm_attn']:
-        raise ValueError("[!] ERROR:  model_name is incorrect. Choose one of - bilstm / bilstm_pool / bilstm_attn")
+    if config['model_name'] not in ['bilstm', 'bilstm_pool', 'han', 'cnn']:
+        raise ValueError("[!] ERROR:  model_name is incorrect. Choose one of - bilstm / bilstm_pool / han / cnn")
     else:
         print("\nModel name checked...")
     if not os.path.exists(vis_path):
@@ -303,16 +288,17 @@ if __name__ == '__main__':
         shutil.rmtree(vis_path)
 
 
-    # Prepare the tensorboard writer
-    writer = SummaryWriter(os.path.join(args.vis_path, config['model_name']))
-
     # Prepare the datasets and iterator for training and evaluation
-    train_x, train_y, val_x, val_y, test_x, test_y, vocab, embeddings = prepare_training(config, classes)
+    train_loader, dev_loader, test_loader, TEXT, LABEL = prepare_training(config, classes)
+    vocab = TEXT.vocab
 
     #Print args
     print("\n" + "x"*50 + "\n\nRunning training with the following parameters: \n")
     for key, value in config.items():
         print(key + ' : ' + str(value))
     print("\n" + "x"*50)
+
+    # Prepare the tensorboard writer
+    writer = SummaryWriter(os.path.join(args.vis_path, config['model_name']))
 
     train_network()

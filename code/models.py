@@ -8,12 +8,17 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class Doc_Classifier(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, pre_trained_embeds = None):
         super(Doc_Classifier, self).__init__()
 
         self.lstm_dim = config['lstm_dim']
         self.fc_dim = config['fc_dim']
         self.num_classes = config['n_classes']
+        self.vocab_size = config['vocab_size']
+        self.embed_dim = config['embed_dim']
+        self.embedding = nn.Embedding(self.vocab_size, self.embed_dim)
+        self.embedding.weight.data.copy_(pre_trained_embeds)
+        self.embedding.requires_grad = False
 
         if config['model_name'] == 'bilstm':
             self.encoder = BiLSTM(config)
@@ -28,6 +33,7 @@ class Doc_Classifier(nn.Module):
                                  nn.Sigmoid())
 
     def forward(self, inp, lens):
+        inp = self.embedding(inp)
         out = self.encoder(inp, lens)
         out = self.classifier(out)
         return out
