@@ -117,10 +117,15 @@ class Doc_Classifier(nn.Module):
             self.encoder = Kim_CNN(config)
 
 
-        self.classifier = nn.Sequential(nn.Linear(2*self.lstm_dim, self.fc_dim),
+        if self.model_name == 'bilstm_reg':
+            self.classifier = nn.Sequential(nn.Dropout(config['dropout']),
+                                    nn.Linear(2 * self.lstm_dim, self.fc_dim),
+                                    nn.ReLU(),
+                                    nn.Linear(self.fc_dim, self.num_classes))
+        else:
+            self.classifier = nn.Sequential(nn.Linear(2*self.lstm_dim, self.fc_dim),
                                  nn.ReLU(),
-                                 nn.Linear(self.fc_dim, self.num_classes),
-                                 nn.Sigmoid())
+                                 nn.Linear(self.fc_dim, self.num_classes))
 
     def forward(self, inp, lens):
         if not self.model_name == 'bilstm_reg':
@@ -129,6 +134,7 @@ class Doc_Classifier(nn.Module):
             out = self.classifier(out)
         else:
             out = self.encoder(inp, self.embedding, lens)
+            out = self.classifier(out.to(device))
         return out
 
 
@@ -173,13 +179,7 @@ class BiLSTM_reg(nn.Module):
         self.embed_droprate = config["embed_drop"]  # Embedding dropout
 
         self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=2, batch_first=False)
-        # self.fc1 = nn.Linear(2 * config["lstm_dim"], config['fc_dim'])  # Hidden Bottleneck Layer
-        # self.fc2 = nn.Linear(config['fc_dim'], config['n_classes'])
-        self.linear = nn.Sequential(nn.Dropout(config['dropout']),
-                                    nn.Linear(2 * config["lstm_dim"], config['fc_dim']),
-                                    nn.ReLU(),
-                                    nn.Linear(config['fc_dim'], config['n_classes']),
-                                    nn.Sigmoid())
+
 
         if self.wdrop:
             self.lstm = WeightDrop(self.lstm, ['weight_hh_l0'], dropout=self.wdrop)
@@ -206,7 +206,6 @@ class BiLSTM_reg(nn.Module):
 
         out = torch.where(rnn_outs_temp.to('cpu') == 0, torch.tensor(-1e8), rnn_outs_temp.to('cpu'))
         out, _ = torch.max(out, 0)
-        out = self.linear(out)
         if self.tar or self.ar:
             return out, rnn_outs
         return out

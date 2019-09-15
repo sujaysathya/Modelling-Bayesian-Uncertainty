@@ -18,6 +18,7 @@ from torch.autograd import Variable
 from torchtext.data import Field, BucketIterator
 from torchtext import datasets
 import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 
 from data_utils import *
@@ -27,16 +28,25 @@ from utils import *
 
 
 def eval_network(model, test = False):
+    if config['model_name'] == 'bilstm_reg':
+        if hasattr(model, 'beta_ema') and model.beta_ema > 0:
+            # Temporal Averaging
+            old_params = model.get_params()
+            model.load_ema_params()
+
     eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
+    predicted_labels, target_labels = list(), list()
+
     batch_loader = dev_loader if not test else test_loader
 
-    total_iters = int(np.ceil(len(val_y)/config['batch_size'])) if not test else int(np.ceil(len(test_y)/config['batch_size']))
     with torch.no_grad():
         for iters, (text, label) in enumerate(batch_loader):
             preds = model(text[0].to(device), text[1].to(device))
-            preds = (preds>0.5).type(torch.FloatTensor)
-            f1, recall, precision, accuracy = evaluation_measures(config, preds, label)
-            f1, recall, precision, accuracy = evaluation_measures(config, preds, label_batch)
+            # preds = (preds>0.5).type(torch.FloatTensor)
+            preds_rounded = F.sigmoid(preds).round().long()
+            predicted_labels.extend(preds_rounded.cpu().detach().numpy())
+            target_labels.extend(label.cpu().detach().numpy())
+            f1, recall, precision, accuracy = evaluation_measures(config, np.array(predicted_labels), np.array(target_labels))
             eval_f1.append(f1)
             eval_precision.append(precision)
             eval_recall.append(recall)
@@ -64,7 +74,7 @@ def train_network():
         optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
     elif config['optimizer'] == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr = config['lr'], momentum = config['momentum'], weight_decay = config['weight_decay'])
-    criterion = nn.BCELoss(reduction = 'mean')
+    criterion = nn.BCEWithLogitsLoss(reduction = 'mean')
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,step_size= config["lr_decay_step"], gamma= config["lr_decay_factor"])
 
     # Load the checkpoint to resume training if found
@@ -89,6 +99,8 @@ def train_network():
     total_iters = 0
     train_loss = []
     train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
+    predicted_labels, target_labels = list(), list()
+
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
     for epoch in range(start_epoch, config['max_epoch']+1):
@@ -105,9 +117,16 @@ def train_network():
             torch.nn.utils.clip_grad_norm_(model.parameters(), 10)
             optimizer.step()
 
-            preds = (preds>0.5).type(torch.FloatTensor)
-            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, preds, label)
-            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, preds, label_batch)
+            if config['model_name'] == 'bilstm_reg':
+                if hasattr(model, 'beta_ema') and model.beta_ema > 0:
+                    # Temporal averaging
+                    model.update_ema()
+
+            # preds = (preds>0.5).type(torch.FloatTensor)
+            preds_rounded = F.sigmoid(preds).round().long()
+            predicted_labels.extend(preds_rounded.cpu().detach().numpy())
+            target_labels.extend(label.cpu().detach().numpy())
+            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, np.array(predicted_labels), np.array(target_labels))
             train_f1_score.append(train_f1)
             train_accuracy_score.append(train_accuracy)
             train_recall_score.append(train_recall)

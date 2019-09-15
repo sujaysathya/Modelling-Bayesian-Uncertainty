@@ -66,10 +66,10 @@ def calc_elapsed_time(start, end):
 
 
 def evaluation_measures(config, preds, labels):
-    f1 = f1_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
-    recall = recall_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
-    precision = precision_score(labels.to('cpu'), preds.to('cpu'), average = 'weighted')
-    accuracy = accuracy_score(labels.to('cpu'), preds.to('cpu'), normalize= True)
+    f1 = f1_score(labels, preds, average = 'weighted')
+    recall = recall_score(labels, preds, average = 'weighted')
+    precision = precision_score(labels, preds, average = 'weighted')
+    accuracy = accuracy_score(labels, preds, normalize= True)
     return f1, recall, precision, accuracy
 
 
