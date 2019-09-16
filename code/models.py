@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from torch.nn import Parameter
+from torchnlp.nn import WeightDrop
 from functools import wraps
 from copy import deepcopy
 from torch import nn
@@ -39,46 +40,47 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
 
 
 
-class WeightDrop(torch.nn.Module):
-    def __init__(self, module, weights, dropout=0, variational=False):
-        super().__init__()
-        self.module = module
-        self.weights = weights
-        self.dropout = dropout
-        self.variational = variational
-        self._setup()
+# class WeightDrop_manual(torch.nn.Module):
+#     def __init__(self, module, weights, dropout=0, variational=False):
+#         super().__init__()
+#         self.module = module
+#         self.weights = weights
+#         self.dropout = dropout
+#         self.variational = variational
+#         self._setup()
 
-    def null_function(*args, **kwargs):
-        # We need to replace flatten_parameters with a nothing function
-        return
+#     def null_function(*args, **kwargs):
+#         # We need to replace flatten_parameters with a nothing function
+#         return
 
-    def _setup(self):
-        # Terrible temporary solution to an issue regarding compacting weights re: CUDNN RNN
-        if issubclass(type(self.module), torch.nn.RNNBase):
-            self.module.flatten_parameters = self.null_function
+#     def _setup(self):
+#         # Terrible temporary solution to an issue regarding compacting weights re: CUDNN RNN
+#         if issubclass(type(self.module), torch.nn.RNNBase):
+#             self.module.flatten_parameters = self.null_function
 
-        for name_w in self.weights:
-            print('Applying weight drop of {} to {}'.format(self.dropout, name_w))
-            w = getattr(self.module, name_w)
-            del self.module._parameters[name_w]
-            self.module.register_parameter(name_w + '_raw', Parameter(w.data))
+#         for name_w in self.weights:
+#             print('Applying weight drop of {} to {}'.format(self.dropout, name_w))
+#             w = getattr(self.module, name_w)
+#             del self.module._parameters[name_w]
+#             self.module.register_parameter(name_w + '_raw', Parameter(w.data))
 
-    def _setweights(self):
-        for name_w in self.weights:
-            raw_w = getattr(self.module, name_w + '_raw')
-            w = None
-            if self.variational:
-                mask = torch.autograd.Variable(torch.ones(raw_w.size(0), 1))
-                if raw_w.is_cuda: mask = mask.cuda()
-                mask = torch.nn.functional.dropout(mask, p=self.dropout, training=True)
-                w = mask.expand_as(raw_w) * raw_w
-            else:
-                w = torch.nn.functional.dropout(raw_w, p=self.dropout, training=self.training)
-            setattr(self.module, name_w, w)
+#     def _setweights(self):
+#         for name_w in self.weights:
+#             raw_w = getattr(self.module, name_w + '_raw')
+#             w = None
+#             if self.variational:
+#                 mask = torch.autograd.Variable(torch.ones(raw_w.size(0), 1))
+#                 if raw_w.is_cuda:
+#                     mask = mask.cuda()
+#                     mask = torch.nn.functional.dropout(mask, p=self.dropout, training=True)
+#                     w = torch.nn.Parameter(mask.expand_as(raw_w) * raw_w)
+#             else:
+#                 w = torch.nn.functional.dropout(raw_w, p=self.dropout, training=self.training).to(device)
+#             setattr(self.module, name_w, w)
 
-    def forward(self, *args):
-        self._setweights()
-        return self.module.forward(*args)
+#     def forward(self, *args):
+#         self._setweights()
+#         return self.module.forward(*args)
 
 
 
@@ -138,6 +140,11 @@ class Doc_Classifier(nn.Module):
         return out
 
 
+"""
+Baseline BiLSTM to run on the entire document as is:
+    1. Option 1: Take the hidden layer output of final cell as the representation of the document
+    2. Option 2: Take pool across embedding dimension of all the cells as the representation of the document
+"""
 class BiLSTM(nn.Module):
     def __init__(self, config, max_pool=False):
         super(BiLSTM, self).__init__()
@@ -168,7 +175,9 @@ class BiLSTM(nn.Module):
         return out
 
 
-
+"""
+BiLSTM_regularized : BiLSTM with Temporal Averaging, weight dropout and embedding dropout. Current SOTA
+"""
 class BiLSTM_reg(nn.Module):
     def __init__(self, config):
         super(BiLSTM_reg, self).__init__()
@@ -178,11 +187,13 @@ class BiLSTM_reg(nn.Module):
         self.wdrop = config["wdrop"]  # Weight dropping
         self.embed_droprate = config["embed_drop"]  # Embedding dropout
 
-        self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=2, batch_first=False)
+        self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=2, batch_first=False).to(device)
+        weights = ['weight_hh_l0']
+        self.lstm = WeightDrop(self.lstm, weights, self.wdrop).to(device)
 
 
-        if self.wdrop:
-            self.lstm = WeightDrop(self.lstm, ['weight_hh_l0'], dropout=self.wdrop)
+        # if self.wdrop:
+        #     self.lstm = WeightDrop(self.lstm, ['weight_hh_l0'], dropout=self.wdrop)
         self.dropout = nn.Dropout(config['dropout'])
 
         if self.beta_ema>0:
@@ -192,8 +203,11 @@ class BiLSTM_reg(nn.Module):
             self.steps_ema = 0.
 
     def forward(self, inp, embedding, lengths=None):
+        sorted_len, sorted_idxs = torch.sort(lengths, descending =True)
+        inp = inp[ : , sorted_idxs].to(device)
 
         inp = embedded_dropout(embedding, inp, dropout=self.embed_droprate if self.training else 0) if self.embed_droprate else embedding(inp)
+        # print("Input embedding shape = ", inp.shape)
 
         if lengths is not None:
             inp = torch.nn.utils.rnn.pack_padded_sequence(inp, lengths, batch_first=False)
@@ -203,9 +217,12 @@ class BiLSTM_reg(nn.Module):
         if lengths is not None:
             rnn_outs,_ = torch.nn.utils.rnn.pad_packed_sequence(rnn_outs, batch_first=False)
             rnn_outs_temp, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_outs_temp, batch_first=False)
+            # print("rnn_outs(after lstm) shape = ", rnn_outs.shape)
 
         out = torch.where(rnn_outs_temp.to('cpu') == 0, torch.tensor(-1e8), rnn_outs_temp.to('cpu'))
         out, _ = torch.max(out, 0)
+        _, unsorted_idxs = torch.sort(sorted_idxs)
+        out = out[unsorted_idxs, :].to(device)
         if self.tar or self.ar:
             return out, rnn_outs
         return out
@@ -243,7 +260,7 @@ class HAN(nn.Module):
 
 
 """
-The CNN based (word) architecture as propsoed by Kim, et.al(2014) 
+The (word) CNN based architecture as propsoed by Kim, et.al(2014) 
 """
 class Kim_CNN(nn.Module):
     def __init__(self, config):

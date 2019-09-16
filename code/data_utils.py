@@ -9,6 +9,11 @@ import warnings
 warnings.filterwarnings("ignore")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
+#####################################
+## Older data pre-prcoessing files ##
+#####################################
+
 def get_data_splits():
     train_docs, train_labels = zip(*[(reuters.raw(i), reuters.categories(i)) for i in reuters.fileids() if i.startswith('training/')])
     test_docs, test_labels = zip(*[(reuters.raw(i), reuters.categories(i)) for i in reuters.fileids() if i.startswith('test/')])
@@ -97,6 +102,11 @@ def get_batch_from_idx(config, word_emb, batch):
     return torch.from_numpy(embedded_docs).float(), torch.from_numpy(doc_lens)
 
 
+
+#################################################
+## Class to manage Reuters data pre-processing ##
+#################################################
+
 class Reuters(TabularDataset):
     TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string, include_lengths=True)
     LABEL = Field(sequential=False, use_vocab=False, batch_first=True, preprocessing=process_labels)
@@ -141,12 +151,12 @@ class Reuters(TabularDataset):
 
         # Getting iterators for each set
         print("\n==>> Preparing Iterators....")
-        train, val, test = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
+        train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
                                      sort_within_batch=True, device=device)
-        return cls.TEXT, cls.LABEL, train, val, test
+        return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter
 
 
-class ReutersHAN(Reuters):
+class Reuters_HAN(Reuters):
     NESTING_FIELD = Field(batch_first=False, tokenize=clean_string)
     TEXT_FIELD = NestedField(NESTING_FIELD, tokenize=split_sents)
 

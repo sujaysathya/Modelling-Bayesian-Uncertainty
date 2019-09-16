@@ -45,9 +45,9 @@ def prepare_training(config, classes):
     print('No. of test instances = ', len(test_batch_loader.dataset))
 
     # Custom wrapper over the iterators
-    train_batch_loader = ReutersBatchGenerator(train_batch_loader)
-    dev_batch_loader = ReutersBatchGenerator(dev_batch_loader)
-    test_batch_loader = ReutersBatchGenerator(test_batch_loader)
+    # train_batch_loader = ReutersBatchGenerator(train_batch_loader)
+    # dev_batch_loader = ReutersBatchGenerator(dev_batch_loader)
+    # test_batch_loader = ReutersBatchGenerator(test_batch_loader)
 
     end = time.time()
     hours, minutes, seconds = calc_elapsed_time(start, end)
@@ -66,10 +66,10 @@ def calc_elapsed_time(start, end):
 
 
 def evaluation_measures(config, preds, labels):
-    f1 = f1_score(labels, preds, average = 'weighted')
-    recall = recall_score(labels, preds, average = 'weighted')
-    precision = precision_score(labels, preds, average = 'weighted')
-    accuracy = accuracy_score(labels, preds, normalize= True)
+    f1 = f1_score(labels, preds, average = 'micro')
+    recall = recall_score(labels, preds, average = 'micro')
+    precision = precision_score(labels, preds, average = 'micro')
+    accuracy = accuracy_score(labels, preds)
     return f1, recall, precision, accuracy
 
 

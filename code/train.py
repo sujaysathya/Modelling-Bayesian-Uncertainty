@@ -28,11 +28,12 @@ from utils import *
 
 
 def eval_network(model, test = False):
+    model.eval()
     if config['model_name'] == 'bilstm_reg':
-        if hasattr(model, 'beta_ema') and model.beta_ema > 0:
+        if hasattr(model.encoder, 'beta_ema') and model.encoder.beta_ema > 0:
             # Temporal Averaging
-            old_params = model.get_params()
-            model.load_ema_params()
+            old_params = model.encoder.get_params()
+            model.encoder.load_ema_params()
 
     eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
     predicted_labels, target_labels = list(), list()
@@ -40,13 +41,11 @@ def eval_network(model, test = False):
     batch_loader = dev_loader if not test else test_loader
 
     with torch.no_grad():
-        for iters, (text, label) in enumerate(batch_loader):
-            preds = model(text[0].to(device), text[1].to(device))
+        for iters, batch in enumerate(batch_loader):
+            preds = model(batch.text[0].to(device), batch.text[1].to(device))
             # preds = (preds>0.5).type(torch.FloatTensor)
             preds_rounded = F.sigmoid(preds).round().long()
-            predicted_labels.extend(preds_rounded.cpu().detach().numpy())
-            target_labels.extend(label.cpu().detach().numpy())
-            f1, recall, precision, accuracy = evaluation_measures(config, np.array(predicted_labels), np.array(target_labels))
+            f1, recall, precision, accuracy = evaluation_measures(config, np.array(preds_rounded.cpu().detach().numpy()), np.array(batch.label.cpu().detach().numpy()))
             eval_f1.append(f1)
             eval_precision.append(precision)
             eval_recall.append(recall)
@@ -55,6 +54,10 @@ def eval_network(model, test = False):
         eval_recall = sum(eval_recall)/len(eval_recall)
         eval_f1 = sum(eval_f1)/len(eval_f1)
         eval_accuracy = sum(eval_accuracy)/len(eval_accuracy)
+
+        if hasattr(model.encoder, 'beta_ema') and model.encoder.beta_ema > 0:
+            # Temporal averaging
+            model.encoder.load_params(old_params)
     return eval_f1, eval_precision, eval_recall, eval_accuracy
 
 
@@ -74,7 +77,7 @@ def train_network():
         optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
     elif config['optimizer'] == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr = config['lr'], momentum = config['momentum'], weight_decay = config['weight_decay'])
-    criterion = nn.BCEWithLogitsLoss(reduction = 'mean')
+    # criterion = F.binary_cross_entropy_with_logits()
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,step_size= config["lr_decay_step"], gamma= config["lr_decay_factor"])
 
     # Load the checkpoint to resume training if found
@@ -106,11 +109,11 @@ def train_network():
     for epoch in range(start_epoch, config['max_epoch']+1):
         model.train()
 
-        for iters, (text, label) in enumerate(train_loader):
+        for iters, batch in enumerate(train_loader):
             model.train()
             # lr_scheduler.step()
-            preds = model(text[0].to(device), text[1].to(device))
-            loss = criterion(preds, label.float())
+            preds = model(batch.text[0].to(device), batch.text[1].to(device))
+            loss = F.binary_cross_entropy_with_logits(preds, batch.label.float())
 
             optimizer.zero_grad()
             loss.backward()
@@ -118,15 +121,13 @@ def train_network():
             optimizer.step()
 
             if config['model_name'] == 'bilstm_reg':
-                if hasattr(model, 'beta_ema') and model.beta_ema > 0:
+                if hasattr(model.encoder, 'beta_ema') and model.encoder.beta_ema > 0:
                     # Temporal averaging
-                    model.update_ema()
+                    model.encoder.update_ema()
 
             # preds = (preds>0.5).type(torch.FloatTensor)
             preds_rounded = F.sigmoid(preds).round().long()
-            predicted_labels.extend(preds_rounded.cpu().detach().numpy())
-            target_labels.extend(label.cpu().detach().numpy())
-            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, np.array(predicted_labels), np.array(target_labels))
+            train_f1, train_recall, train_precision, train_accuracy = evaluation_measures(config, np.array(preds_rounded.cpu().detach().numpy()), np.array(batch.label.cpu().detach().numpy()))
             train_f1_score.append(train_f1)
             train_accuracy_score.append(train_accuracy)
             train_recall_score.append(train_recall)
