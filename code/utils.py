@@ -13,9 +13,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 import csv
 maxInt = sys.maxsize
 while True:
-    # decrease the maxInt value by factor 10 
-    # as long as the OverflowError occurs.
-
+    # decrease the maxInt value by factor 2 as long as the OverflowError occurs.
     try:
         csv.field_size_limit(maxInt)
         break
@@ -34,9 +32,6 @@ def prepare_training(config, classes):
     vocab_size = len(TEXT.vocab)
     config['vocab_size'] = vocab_size
 
-    # print("\nExample document: \n", next(train_batch_loader.text))
-    # print("\nLabels for the above document: \n", next(train_batch_loader.label))
-
     print("\n\nDATA STATISTICS:\n" + "-"*50)
     print("\nVocabulary size = ", vocab_size)
     print('No. of target classes = ', train_batch_loader.dataset.NUM_CLASSES)
@@ -52,7 +47,6 @@ def prepare_training(config, classes):
     end = time.time()
     hours, minutes, seconds = calc_elapsed_time(start, end)
     print("\n"+ "-"*50 + "\nTook  {:0>2} hours: {:0>2} mins: {:05.2f} secs  to Prepare Data\n".format(hours,minutes,seconds))
-    # return train_x, train_y, val_x, val_y, test_data, test_y, vocab, embeddings
     return train_batch_loader, dev_batch_loader, test_batch_loader, TEXT, LABEL
 
 

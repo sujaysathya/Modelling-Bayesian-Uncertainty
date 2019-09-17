@@ -36,7 +36,10 @@ def eval_network(model, test = False):
             model.encoder.load_ema_params()
 
     eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
+<<<<<<< HEAD
+=======
     predicted_labels, target_labels = list(), list()
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
     batch_loader = dev_loader if not test else test_loader
 
@@ -68,6 +71,8 @@ def train_network():
     # Seeds for reproduceable runs
     torch.manual_seed(42)
     torch.cuda.manual_seed(42)
+    np.random.seed(42)
+    random.seed(42)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
@@ -77,7 +82,11 @@ def train_network():
         optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
     elif config['optimizer'] == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr = config['lr'], momentum = config['momentum'], weight_decay = config['weight_decay'])
+<<<<<<< HEAD
+    #criterion = nn.BCEWithLogitsLoss(reduction = 'mean')
+=======
     # criterion = F.binary_cross_entropy_with_logits()
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,step_size= config["lr_decay_step"], gamma= config["lr_decay_factor"])
 
     # Load the checkpoint to resume training if found
@@ -98,11 +107,16 @@ def train_network():
 
     start = time.time()
     best_val_acc = 0
+    best_val_f1 = 0
     prev_val_acc = 0
+    prev_val_f1 = 0
     total_iters = 0
     train_loss = []
     train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
+<<<<<<< HEAD
+=======
     predicted_labels, target_labels = list(), list()
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
@@ -165,9 +179,9 @@ def train_network():
             writer.add_histogram('epochs/' + name, param.data.view(-1), global_step= epoch)
 
         # Save model checkpoints for best model
-        if eval_accuracy > best_val_acc:
+        if eval_f1 > best_val_f1:
             print("New High Score! Saving model...\n")
-            best_val_acc = eval_accuracy
+            best_val_f1 = eval_f1
             # Save the state and the vocabulary
             torch.save({
                 'epoch': epoch,
@@ -176,9 +190,9 @@ def train_network():
                 'text_vocab': vocab,
             }, os.path.join(config['model_checkpoint_path'], config['model_name'], config['model_save_name']))
 
-        # If validation accuracy does not improve, divide the learning rate by 5 and
-        # if learning rate falls below 1e-5 terminate training
-        if eval_accuracy <= prev_val_acc:
+        # If validation f1 score does not improve, divide the learning rate by 5 and
+        # if learning rate falls below given threshold, then terminate training
+        if eval_f1 <= prev_val_f1:
             for param_group in optimizer.param_groups:
                 if param_group['lr'] < config['lr_cut_off']:
                     terminate_training = True
@@ -186,7 +200,7 @@ def train_network():
                 param_group['lr'] /= 5
                 print("Learning rate changed to :  {}\n".format(param_group['lr']))
 
-        prev_val_acc = eval_accuracy
+        prev_val_f1 = eval_f1
         if terminate_training:
             break
 
@@ -246,7 +260,7 @@ if __name__ == '__main__':
                           help='number of classes"')
     parser.add_argument('--optimizer', type = str, default = 'Adam',
                         help = 'Optimizer to use for training')
-    parser.add_argument('--weight_decay', type = float, default = 1e-4,
+    parser.add_argument('--weight_decay', type = float, default = 0,
                         help = 'weight decay for optimizer')
     parser.add_argument('--momentum', type = float, default = 0.8,
                         help = 'Momentum for optimizer')

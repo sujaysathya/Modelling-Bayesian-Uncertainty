@@ -41,7 +41,16 @@ def tokenize(dataset):
 def clean_string(string):
     string = re.sub(r"[^A-Za-z0-9(),!?\'`]", " ", string)
     string = re.sub(r"\s{2,}", " ", string)
-    return string.lower().strip().split()
+    tokens = string.lower().strip().split()
+    return tokens
+
+def clean_string_stop_words_remove(string):
+    string = re.sub(r"[^A-Za-z0-9(),!?\'`]", " ", string)
+    string = re.sub(r"\s{2,}", " ", string)
+    nltk_stopwords = nltk.corpus.stopwords.words('english')
+    tokens = string.lower().strip().split()
+    tokens = [t for t in tokens if not t in nltk_stopwords]
+    return tokens
 
 
 def split_sents(string):
@@ -117,7 +126,7 @@ class Reuters(TabularDataset):
         return len(ex.text)
 
     @classmethod
-    def splits(cls, path, train=os.path.join('reuters_split', 'train.tsv'),
+    def get_dataset_splits(cls, path, train=os.path.join('reuters_split', 'train.tsv'),
                validation=os.path.join('reuters_split', 'dev.tsv'),
                test=os.path.join('reuters_split', 'test.tsv'), **kwargs):
 
@@ -126,24 +135,15 @@ class Reuters(TabularDataset):
             format='tsv', fields=[('label', cls.LABEL), ('text', cls.TEXT)])
 
     @classmethod
-    def iters(cls, config, path, shuffle=True):
-        """
-         path: directory containing train, test, dev files
-         vectors_name: name of word vectors file
-         vectors_cache: path to directory containing word vectors file
-         batch_size: batch size
-         device: GPU device
-         vectors: custom vectors - either predefined torchtext vectors or your own custom Vector classes
-         unk_init: function used to generate vector for OOV words
-        """
+    def main_handler(cls, config, data_dir, shuffle=True):
 
         # Getting Data Splits: train, dev, test
         print("\n\n==>> Loading Data splits and tokenizing each document....")
-        train, val, test = cls.splits(path)
+        train, val, test = cls.get_dataset_splits(data_dir)
 
         # Build Vocabulary and obtain embeddings for each word in Vocabulary
         print("\n==>> Building Vocabulary and obtaining embeddings....")
-        glove_embeds = torchtext.vocab.Vectors(name= config['glove_path'], max_vectors= config['embed_dim'])
+        glove_embeds = torchtext.vocab.Vectors(name= config['glove_path'], max_vectors = int(2e5))
         cls.TEXT.build_vocab(train, val, test, vectors=glove_embeds)
 
         # Setting 'unk' token as the average of all other embeddings
@@ -154,11 +154,23 @@ class Reuters(TabularDataset):
         train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
                                      sort_within_batch=True, device=device)
         return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter
+<<<<<<< HEAD
 
+=======
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
+class Reuters_HAN(Reuters):
+    NESTING = Field(batch_first=False, tokenize=clean_string)
+    TEXT = NestedField(NESTING, tokenize=split_sents)
+
+<<<<<<< HEAD
+class Reuters_CNN(Reuters):
+    TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
+=======
 class Reuters_HAN(Reuters):
     NESTING_FIELD = Field(batch_first=False, tokenize=clean_string)
     TEXT_FIELD = NestedField(NESTING_FIELD, tokenize=split_sents)
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
 
 

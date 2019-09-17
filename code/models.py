@@ -40,6 +40,16 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
 
 
 
+<<<<<<< HEAD
+class WeightDrop_manual(torch.nn.Module):
+    def __init__(self, module, weights, dropout=0, variational=False):
+        super().__init__()
+        self.module = module
+        self.weights = weights
+        self.dropout = dropout
+        self.variational = variational
+        self._setup()
+=======
 # class WeightDrop_manual(torch.nn.Module):
 #     def __init__(self, module, weights, dropout=0, variational=False):
 #         super().__init__()
@@ -48,6 +58,7 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
 #         self.dropout = dropout
 #         self.variational = variational
 #         self._setup()
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
 #     def null_function(*args, **kwargs):
 #         # We need to replace flatten_parameters with a nothing function
@@ -64,6 +75,21 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
 #             del self.module._parameters[name_w]
 #             self.module.register_parameter(name_w + '_raw', Parameter(w.data))
 
+<<<<<<< HEAD
+    def _setweights(self):
+        for name_w in self.weights:
+            raw_w = getattr(self.module, name_w + '_raw')
+            w = None
+            if self.variational:
+                mask = torch.autograd.Variable(torch.ones(raw_w.size(0), 1))
+                if raw_w.is_cuda:
+                    mask = mask.cuda()
+                    mask = torch.nn.functional.dropout(mask, p=self.dropout, training=True)
+                    w = torch.nn.Parameter(mask.expand_as(raw_w) * raw_w)
+            else:
+                w = torch.nn.functional.dropout(raw_w, p=self.dropout, training=self.training).to(device)
+            setattr(self.module, name_w, w)
+=======
 #     def _setweights(self):
 #         for name_w in self.weights:
 #             raw_w = getattr(self.module, name_w + '_raw')
@@ -77,6 +103,7 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
 #             else:
 #                 w = torch.nn.functional.dropout(raw_w, p=self.dropout, training=self.training).to(device)
 #             setattr(self.module, name_w, w)
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
 #     def forward(self, *args):
 #         self._setweights()
@@ -176,7 +203,11 @@ class BiLSTM(nn.Module):
 
 
 """
+<<<<<<< HEAD
+BiLSTM_regularized : BiLSTM with Temporal Averaging, weight dropout and embedding dropout. Current SOTA on Reuters
+=======
 BiLSTM_regularized : BiLSTM with Temporal Averaging, weight dropout and embedding dropout. Current SOTA
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 """
 class BiLSTM_reg(nn.Module):
     def __init__(self, config):
@@ -187,6 +218,14 @@ class BiLSTM_reg(nn.Module):
         self.wdrop = config["wdrop"]  # Weight dropping
         self.embed_droprate = config["embed_drop"]  # Embedding dropout
 
+<<<<<<< HEAD
+        self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=1, batch_first=False).to(device)
+
+        # Applyying Weight dropout to hh_l0 layer of the LSTM
+        weights = ['weight_hh_l0']
+        self.lstm = WeightDrop(self.lstm, weights, self.wdrop).to(device)
+
+=======
         self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=2, batch_first=False).to(device)
         weights = ['weight_hh_l0']
         self.lstm = WeightDrop(self.lstm, weights, self.wdrop).to(device)
@@ -194,6 +233,7 @@ class BiLSTM_reg(nn.Module):
 
         # if self.wdrop:
         #     self.lstm = WeightDrop(self.lstm, ['weight_hh_l0'], dropout=self.wdrop)
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
         self.dropout = nn.Dropout(config['dropout'])
 
         if self.beta_ema>0:
@@ -212,19 +252,24 @@ class BiLSTM_reg(nn.Module):
         if lengths is not None:
             inp = torch.nn.utils.rnn.pack_padded_sequence(inp, lengths, batch_first=False)
         rnn_outs, _ = self.lstm(inp)
-        rnn_outs_temp = rnn_outs
 
         if lengths is not None:
             rnn_outs,_ = torch.nn.utils.rnn.pad_packed_sequence(rnn_outs, batch_first=False)
+<<<<<<< HEAD
+=======
             rnn_outs_temp, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_outs_temp, batch_first=False)
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
             # print("rnn_outs(after lstm) shape = ", rnn_outs.shape)
 
-        out = torch.where(rnn_outs_temp.to('cpu') == 0, torch.tensor(-1e8), rnn_outs_temp.to('cpu'))
+        out = torch.where(rnn_outs.to('cpu') == 0, torch.tensor(-1e8), rnn_outs.to('cpu'))
         out, _ = torch.max(out, 0)
         _, unsorted_idxs = torch.sort(sorted_idxs)
         out = out[unsorted_idxs, :].to(device)
+<<<<<<< HEAD
+=======
         if self.tar or self.ar:
             return out, rnn_outs
+>>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
         return out
 
 
