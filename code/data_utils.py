@@ -118,7 +118,7 @@ def get_batch_from_idx(config, word_emb, batch):
 
 class Reuters(TabularDataset):
     TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string, include_lengths=True)
-    LABEL = Field(sequential=False, use_vocab=False, batch_first=True, preprocessing=process_labels)
+    LABEL = Field(sequential=False, use_vocab=False, batch_first=False, preprocessing=process_labels)
     NUM_CLASSES = 90
 
     @staticmethod
@@ -126,12 +126,12 @@ class Reuters(TabularDataset):
         return len(ex.text)
 
     @classmethod
-    def get_dataset_splits(cls, path, train=os.path.join('reuters_split', 'train.tsv'),
+    def get_dataset_splits(cls, data_dir, train=os.path.join('reuters_split', 'train.tsv'),
                validation=os.path.join('reuters_split', 'dev.tsv'),
                test=os.path.join('reuters_split', 'test.tsv'), **kwargs):
 
         return super(Reuters, cls).splits(
-            path, train=train, validation=validation, test=test,
+            data_dir, train=train, validation=validation, test=test,
             format='tsv', fields=[('label', cls.LABEL), ('text', cls.TEXT)])
 
     @classmethod
@@ -147,30 +147,24 @@ class Reuters(TabularDataset):
         cls.TEXT.build_vocab(train, val, test, vectors=glove_embeds)
 
         # Setting 'unk' token as the average of all other embeddings
-        cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(cls.TEXT.vocab.vectors, dim=0)
+        if config['model_name'] != 'han':
+            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(cls.TEXT.vocab.vectors, dim=0)
 
         # Getting iterators for each set
         print("\n==>> Preparing Iterators....")
         train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
                                      sort_within_batch=True, device=device)
         return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter
-<<<<<<< HEAD
 
-=======
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
 class Reuters_HAN(Reuters):
-    NESTING = Field(batch_first=False, tokenize=clean_string)
-    TEXT = NestedField(NESTING, tokenize=split_sents)
+    NESTING = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string)
+    TEXT = NestedField(NESTING, tokenize=split_sents, include_lengths = True)
 
-<<<<<<< HEAD
+
 class Reuters_CNN(Reuters):
     TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
-=======
-class Reuters_HAN(Reuters):
-    NESTING_FIELD = Field(batch_first=False, tokenize=clean_string)
-    TEXT_FIELD = NestedField(NESTING_FIELD, tokenize=split_sents)
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
+
 
 
 

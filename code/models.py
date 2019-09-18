@@ -40,7 +40,8 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
 
 
 
-<<<<<<< HEAD
+
+
 class WeightDrop_manual(torch.nn.Module):
     def __init__(self, module, weights, dropout=0, variational=False):
         super().__init__()
@@ -49,33 +50,22 @@ class WeightDrop_manual(torch.nn.Module):
         self.dropout = dropout
         self.variational = variational
         self._setup()
-=======
-# class WeightDrop_manual(torch.nn.Module):
-#     def __init__(self, module, weights, dropout=0, variational=False):
-#         super().__init__()
-#         self.module = module
-#         self.weights = weights
-#         self.dropout = dropout
-#         self.variational = variational
-#         self._setup()
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
-#     def null_function(*args, **kwargs):
-#         # We need to replace flatten_parameters with a nothing function
-#         return
+    def null_function(*args, **kwargs):
+        # We need to replace flatten_parameters with a nothing function
+        return
 
-#     def _setup(self):
-#         # Terrible temporary solution to an issue regarding compacting weights re: CUDNN RNN
-#         if issubclass(type(self.module), torch.nn.RNNBase):
-#             self.module.flatten_parameters = self.null_function
+    def _setup(self):
+        # Terrible temporary solution to an issue regarding compacting weights re: CUDNN RNN
+        if issubclass(type(self.module), torch.nn.RNNBase):
+            self.module.flatten_parameters = self.null_function
 
-#         for name_w in self.weights:
-#             print('Applying weight drop of {} to {}'.format(self.dropout, name_w))
-#             w = getattr(self.module, name_w)
-#             del self.module._parameters[name_w]
-#             self.module.register_parameter(name_w + '_raw', Parameter(w.data))
+        for name_w in self.weights:
+            print('Applying weight drop of {} to {}'.format(self.dropout, name_w))
+            w = getattr(self.module, name_w)
+            del self.module._parameters[name_w]
+            self.module.register_parameter(name_w + '_raw', Parameter(w.data))
 
-<<<<<<< HEAD
     def _setweights(self):
         for name_w in self.weights:
             raw_w = getattr(self.module, name_w + '_raw')
@@ -89,25 +79,24 @@ class WeightDrop_manual(torch.nn.Module):
             else:
                 w = torch.nn.functional.dropout(raw_w, p=self.dropout, training=self.training).to(device)
             setattr(self.module, name_w, w)
-=======
-#     def _setweights(self):
-#         for name_w in self.weights:
-#             raw_w = getattr(self.module, name_w + '_raw')
-#             w = None
-#             if self.variational:
-#                 mask = torch.autograd.Variable(torch.ones(raw_w.size(0), 1))
-#                 if raw_w.is_cuda:
-#                     mask = mask.cuda()
-#                     mask = torch.nn.functional.dropout(mask, p=self.dropout, training=True)
-#                     w = torch.nn.Parameter(mask.expand_as(raw_w) * raw_w)
-#             else:
-#                 w = torch.nn.functional.dropout(raw_w, p=self.dropout, training=self.training).to(device)
-#             setattr(self.module, name_w, w)
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
 
-#     def forward(self, *args):
-#         self._setweights()
-#         return self.module.forward(*args)
+    def _setweights(self):
+        for name_w in self.weights:
+            raw_w = getattr(self.module, name_w + '_raw')
+            w = None
+            if self.variational:
+                mask = torch.autograd.Variable(torch.ones(raw_w.size(0), 1))
+                if raw_w.is_cuda:
+                    mask = mask.cuda()
+                    mask = torch.nn.functional.dropout(mask, p=self.dropout, training=True)
+                    w = torch.nn.Parameter(mask.expand_as(raw_w) * raw_w)
+            else:
+                w = torch.nn.functional.dropout(raw_w, p=self.dropout, training=self.training).to(device)
+            setattr(self.module, name_w, w)
+
+    def forward(self, *args):
+        self._setweights()
+        return self.module.forward(*args)
 
 
 
@@ -136,34 +125,34 @@ class Doc_Classifier(nn.Module):
 
         if self.model_name == 'bilstm':
             self.encoder = BiLSTM(config)
+            self.fc_inp_dim = config['lstm_dim']
         elif self.model_name == 'bilstm_pool':
             self.encoder = BiLSTM(config, max_pool = True)
+            self.fc_inp_dim = config['lstm_dim']
         elif self.model_name == 'bilstm_reg':
             self.encoder = BiLSTM_reg(config)
+            self.fc_inp_dim = config['lstm_dim']
         elif self.model_name == 'han':
-            self.encoder = HAN(config)
+            self.encoder = HAN_main(config)
+            self.fc_inp_dim = config['sent_gru_dim']
         elif self.model_name == 'cnn':
             self.encoder = Kim_CNN(config)
 
 
-        if self.model_name == 'bilstm_reg':
-            self.classifier = nn.Sequential(nn.Dropout(config['dropout']),
-                                    nn.Linear(2 * self.lstm_dim, self.fc_dim),
-                                    nn.ReLU(),
-                                    nn.Linear(self.fc_dim, self.num_classes))
-        else:
-            self.classifier = nn.Sequential(nn.Linear(2*self.lstm_dim, self.fc_dim),
-                                 nn.ReLU(),
-                                 nn.Linear(self.fc_dim, self.num_classes))
+        self.classifier = nn.Sequential(nn.Linear(2*self.fc_inp_dim, self.fc_dim),
+                                                nn.ReLU(),
+                                                nn.Linear(self.fc_dim, self.num_classes))
+        self.drop = nn.Dropout(config['dropout'])
 
     def forward(self, inp, lens):
-        if not self.model_name == 'bilstm_reg':
+        if not self.model_name == 'bilstm_reg' and not self.model_name == 'han':
             inp = self.embedding(inp)
             out = self.encoder(inp, lens)
             out = self.classifier(out)
         else:
             out = self.encoder(inp, self.embedding, lens)
-            out = self.classifier(out.to(device))
+            out = self.drop(out.to(device))
+            out = self.classifier(out)
         return out
 
 
@@ -203,11 +192,7 @@ class BiLSTM(nn.Module):
 
 
 """
-<<<<<<< HEAD
-BiLSTM_regularized : BiLSTM with Temporal Averaging, weight dropout and embedding dropout. Current SOTA on Reuters
-=======
-BiLSTM_regularized : BiLSTM with Temporal Averaging, weight dropout and embedding dropout. Current SOTA
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
+BiLSTM_regularized : BiLSTM with Temporal Averaging, weight dropout and embedding dropout. Current SOTA on Reuters dataset
 """
 class BiLSTM_reg(nn.Module):
     def __init__(self, config):
@@ -218,22 +203,12 @@ class BiLSTM_reg(nn.Module):
         self.wdrop = config["wdrop"]  # Weight dropping
         self.embed_droprate = config["embed_drop"]  # Embedding dropout
 
-<<<<<<< HEAD
         self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=1, batch_first=False).to(device)
 
         # Applyying Weight dropout to hh_l0 layer of the LSTM
         weights = ['weight_hh_l0']
         self.lstm = WeightDrop(self.lstm, weights, self.wdrop).to(device)
 
-=======
-        self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=2, batch_first=False).to(device)
-        weights = ['weight_hh_l0']
-        self.lstm = WeightDrop(self.lstm, weights, self.wdrop).to(device)
-
-
-        # if self.wdrop:
-        #     self.lstm = WeightDrop(self.lstm, ['weight_hh_l0'], dropout=self.wdrop)
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
         self.dropout = nn.Dropout(config['dropout'])
 
         if self.beta_ema>0:
@@ -251,25 +226,19 @@ class BiLSTM_reg(nn.Module):
 
         if lengths is not None:
             inp = torch.nn.utils.rnn.pack_padded_sequence(inp, lengths, batch_first=False)
-        rnn_outs, _ = self.lstm(inp)
+        all_states, _ = self.lstm(inp)
 
         if lengths is not None:
-            rnn_outs,_ = torch.nn.utils.rnn.pad_packed_sequence(rnn_outs, batch_first=False)
-<<<<<<< HEAD
-=======
-            rnn_outs_temp, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_outs_temp, batch_first=False)
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
+            all_states,_ = torch.nn.utils.rnn.pad_packed_sequence(all_states, batch_first=False)
             # print("rnn_outs(after lstm) shape = ", rnn_outs.shape)
 
-        out = torch.where(rnn_outs.to('cpu') == 0, torch.tensor(-1e8), rnn_outs.to('cpu'))
+        out = torch.where(all_states.to('cpu') == 0, torch.tensor(-1e8), all_states.to('cpu'))
         out, _ = torch.max(out, 0)
         _, unsorted_idxs = torch.sort(sorted_idxs)
         out = out[unsorted_idxs, :].to(device)
-<<<<<<< HEAD
-=======
+        
         if self.tar or self.ar:
-            return out, rnn_outs
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
+            return out, all_states
         return out
 
 
@@ -291,17 +260,92 @@ class BiLSTM_reg(nn.Module):
         return params
 
 
+
+####################################
+## Classes for HAN implementation ##
+####################################
 """
 The heirarchical attention network working on word and sentence level attention
 """
-class HAN(nn.Module):
+class HAN_main(nn.Module):
     def __init__(self, config):
-        super(HAN, self).__init__()
+        super(HAN_main, self).__init__()
+        self.word_attn = HAN_word_attention(config)
+        self.sentence_attn = HAN_sentence_attention(config)
 
 
-    def forward(Self, input):
+    def forward(self, inp, embedding, length):
+        inp = inp.permute(1,2,0)
+        # print(inp.shape)
+        num_sents = inp.size(0)
+        sent_representations = None
+        for i in range(num_sents):
+            word_attn_outs = self.word_attn(inp[i, :], embedding)
+            if sent_representations is None:
+                sent_representations = word_attn_outs
+            else:
+                torch.cat((sent_representations, word_attn_outs), dim=0)
 
-        return None
+        sent_attn_outs = self.sentence_attn(sent_representations)
+        return sent_attn_outs
+
+
+class HAN_word_attention(nn.Module):
+    def __init__(self, config):
+        super(HAN_word_attention, self).__init__()
+        self.word_hidden_dim = config['word_gru_dim']
+        self.embed_dim = config['embed_dim']
+        self.context_weights = nn.Parameter(torch.rand(2*self.word_hidden_dim, 1))
+        self.context_weights.data.uniform_(-0.25, 0.25)
+        self.gru = nn.GRU(self.embed_dim, self.word_hidden_dim, bidirectional = True)
+        self.lin_projection = nn.Sequential(nn.Linear(2*self.word_hidden_dim, 2*self.word_hidden_dim), nn.Tanh())
+        self.attn_wts = nn.Softmax()
+
+
+    def forward(self, inp, embedding):
+        # print(inp.shape)
+        inp = embedding(inp)
+        # print(inp.shape)
+        all_states_words, _ = self.gru(inp)
+        # print(all_states_words.shape)
+        out = self.lin_projection(all_states_words)
+        # print(out.shape)
+        out = torch.matmul(out, self.context_weights)
+        # print(out.shape)
+        out = out.squeeze(dim=2)
+        # print(out.shape)
+        out = self.attn_wts(out.transpose(1, 0))
+        # print(out.shape)
+        out = torch.mul(all_states_words.permute(2, 0, 1), out.transpose(1, 0))
+        # print(out.shape)
+        out = torch.sum(out, dim=1).transpose(1, 0).unsqueeze(0)
+        # print(out.shape)
+        return out
+
+
+class HAN_sentence_attention(nn.Module):
+    def __init__(self, config):
+        super(HAN_sentence_attention, self).__init__()
+        self.word_hidden_dim = config['word_gru_dim']
+        self.sent_hidden_dim = config['sent_gru_dim']
+        self.embed_dim = config['embed_dim']
+        self.context_weights = nn.Parameter(torch.rand(2*self.sent_hidden_dim, 1))
+        self.context_weights.data.uniform_(-0.1, 0.1)
+        self.gru = nn.GRU(2*self.word_hidden_dim, self.sent_hidden_dim, bidirectional = True)
+        self.lin_projection = nn.Sequential(nn.Linear(2*self.sent_hidden_dim, 2*self.sent_hidden_dim), nn.Tanh())
+        self.attn_wts = nn.Softmax()
+
+
+    def forward(self, inp):
+
+        all_states_sents,_ = self.gru(inp)
+        out = self.lin_projection((all_states_sents))
+        out = torch.matmul(out, self.context_weights)
+        out = out.squeeze(dim=2)
+        out = self.attn_wts(out.transpose(1,0))
+        out = torch.mul(all_states_sents.permute(2, 0, 1), out.transpose(1, 0))
+        out = torch.sum(out, dim=1).transpose(1, 0).unsqueeze(0)
+        return out.squeeze(0)
 
 
 """
@@ -312,6 +356,6 @@ class Kim_CNN(nn.Module):
         super(Kim_CNN, self).__init__()
 
 
-    def forward(Self, input):
+    def forward(self, input):
 
         return None

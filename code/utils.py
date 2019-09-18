@@ -28,7 +28,11 @@ def prepare_training(config, classes):
     print("="*80 + "\n\t\t\t\t Preparing Data\n" + "="*80)
     start = time.time()
 
-    TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader = Reuters.iters(config, config['reuters_path'], shuffle=True)
+    if config['model_name'] == 'han':
+        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader = Reuters_HAN.main_handler(config, config['reuters_path'], shuffle=True)
+    else:
+        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader = Reuters.main_handler(config, config['reuters_path'], shuffle=True)
+
     vocab_size = len(TEXT.vocab)
     config['vocab_size'] = vocab_size
 

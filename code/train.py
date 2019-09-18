@@ -36,11 +36,6 @@ def eval_network(model, test = False):
             model.encoder.load_ema_params()
 
     eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
-<<<<<<< HEAD
-=======
-    predicted_labels, target_labels = list(), list()
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
-
     batch_loader = dev_loader if not test else test_loader
 
     with torch.no_grad():
@@ -82,12 +77,9 @@ def train_network():
         optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
     elif config['optimizer'] == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr = config['lr'], momentum = config['momentum'], weight_decay = config['weight_decay'])
-<<<<<<< HEAD
+
     #criterion = nn.BCEWithLogitsLoss(reduction = 'mean')
-=======
-    # criterion = F.binary_cross_entropy_with_logits()
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,step_size= config["lr_decay_step"], gamma= config["lr_decay_factor"])
+    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,step_size= config["lr_decay_step"], gamma= config["lr_decay_factor"])
 
     # Load the checkpoint to resume training if found
     model_file = os.path.join(config['model_checkpoint_path'], config['model_name'], config['model_save_name'])
@@ -113,11 +105,6 @@ def train_network():
     total_iters = 0
     train_loss = []
     train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
-<<<<<<< HEAD
-=======
-    predicted_labels, target_labels = list(), list()
->>>>>>> f712068342f99b8f512a3f8bff61991c53da4ece
-
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
     for epoch in range(start_epoch, config['max_epoch']+1):
@@ -125,6 +112,7 @@ def train_network():
 
         for iters, batch in enumerate(train_loader):
             model.train()
+            # print("batch  = ", batch.text[0])
             # lr_scheduler.step()
             preds = model(batch.text[0].to(device), batch.text[1].to(device))
             loss = F.binary_cross_entropy_with_logits(preds, batch.label.float())
@@ -187,7 +175,6 @@ def train_network():
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'text_vocab': vocab,
             }, os.path.join(config['model_checkpoint_path'], config['model_name'], config['model_save_name']))
 
         # If validation f1 score does not improve, divide the learning rate by 5 and
@@ -244,7 +231,7 @@ if __name__ == '__main__':
                        help = 'saved model name')
 
     # Training Params
-    parser.add_argument('--model_name', type = str, default = 'bilstm_reg',
+    parser.add_argument('--model_name', type = str, default = 'han',
                           help='model name: bilstm / bilstm_pool / bilstm_reg / han / cnn')
     parser.add_argument('--lr', type = float, default = 0.01,
                           help='Learning rate for training')
@@ -254,6 +241,10 @@ if __name__ == '__main__':
                           help='dimension of word embeddings used(GLove)"')
     parser.add_argument('--lstm_dim', type = int, default = 512,
                           help='dimen of hidden unit of LSTM/BiLSTM networks"')
+    parser.add_argument('--word_gru_dim', type = int, default = 50,
+                          help='dimen of hidden unit of word-level attn GRU units of HAN"')
+    parser.add_argument('--sent_gru_dim', type = int, default = 50,
+                          help='dimen of hidden unit of sentence-level attn GRU units of HAN"')
     parser.add_argument('--fc_dim', type = int, default = 256,
                           help='dimen of FC layer"')
     parser.add_argument('--n_classes', type = int, default = 90,
