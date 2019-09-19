@@ -163,8 +163,8 @@ class Reuters_HAN(Reuters):
 
 
 class Reuters_CNN(Reuters):
-    TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
-
+    TEXT = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=True, batch_first=False, preprocessing=process_labels)
 
 
 
