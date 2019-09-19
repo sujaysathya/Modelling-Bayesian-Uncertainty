@@ -231,7 +231,7 @@ if __name__ == '__main__':
                        help = 'saved model name')
 
     # Training Params
-    parser.add_argument('--model_name', type = str, default = 'han',
+    parser.add_argument('--model_name', type = str, default = 'cnn',
                           help='model name: bilstm / bilstm_pool / bilstm_reg / han / cnn')
     parser.add_argument('--lr', type = float, default = 0.01,
                           help='Learning rate for training')
@@ -273,6 +273,10 @@ if __name__ == '__main__':
                         help = 'Regularization - embedding dropout')
     parser.add_argument('--dropout', type = float, default = 0.5,
                         help = 'Regularization - dropout in LSTM cells')
+    parser.add_argument('-kernel-num', type=int, default=100, 
+                        help='number of each kind of kernel')
+    parser.add_argument('-kernel-sizes', type=str, default='3,4,5', 
+                        help='comma-separated kernel size to use for convolution')
 
     args, unparsed = parser.parse_known_args()
     config = args.__dict__

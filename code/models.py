@@ -8,6 +8,7 @@ from torch import nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 import warnings
 warnings.filterwarnings("ignore")
+import torch.nn.functional as F
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -137,6 +138,7 @@ class Doc_Classifier(nn.Module):
             self.fc_inp_dim = config['sent_gru_dim']
         elif self.model_name == 'cnn':
             self.encoder = Kim_CNN(config)
+            self.fc_inp_dim = int(config["kernel_num"]*len(config["kernel_sizes"].split(','))/2)
 
 
         self.classifier = nn.Sequential(nn.Linear(2*self.fc_inp_dim, self.fc_dim),
@@ -354,8 +356,27 @@ The (word) CNN based architecture as propsoed by Kim, et.al(2014)
 class Kim_CNN(nn.Module):
     def __init__(self, config):
         super(Kim_CNN, self).__init__()
+        self.D = config["embed_dim"]
+        self.C = config["n_classes"]
+        self.Ci = 1
+        self.Co = config["kernel_num"]
+        self.Ks = [int(k) for k in config["kernel_sizes"].split(',')]
 
+        # self.convs1 = [nn.Conv2d(Ci, Co, (K, D)) for K in Ks]
+        self.convs1 = nn.ModuleList([nn.Conv2d(self.Ci, self.Co, (K, self.D)) for K in self.Ks])
+        self.dropout = nn.Dropout(config["dropout"])
+        
+    def conv_and_pool(self, x, conv):
+        # x = F.relu(conv(x)).squeeze(3)  # (B, Co, L)
+        # x = F.max_pool1d(x, x.size(2)).squeeze(2)
+        return x
 
-    def forward(self, input):
-
-        return None
+    def forward(self, inp, lens):
+        # x is (B, L, D)
+        inp = inp.permute(1,0,2)
+        inp = inp.unsqueeze(1)  # (B, Ci, L, D)
+        inp = [F.relu(conv(inp)).squeeze(3) for conv in self.convs1]  # [(B, Co, L), ...]*len(Ks)
+        inp = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in inp]  # [(B, Co), ...]*len(Ks)
+        out = torch.cat(inp, 1)
+        out = self.dropout(out)  # (B, len(Ks)*Co)
+        return out
