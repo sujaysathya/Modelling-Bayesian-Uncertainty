@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from torch.nn import Parameter
-from torchnlp.nn import WeightDrop
+# from torchnlp.nn import WeightDrop
 from functools import wraps
 from copy import deepcopy
 from torch import nn
@@ -137,6 +137,7 @@ class Doc_Classifier(nn.Module):
             self.fc_inp_dim = config['sent_gru_dim']
         elif self.model_name == 'cnn':
             self.encoder = Kim_CNN(config)
+            self.fc_inp_dim = config["kernel_num"]*len(config["kernel_sizes"].split(','))/2
 
 
         self.classifier = nn.Sequential(nn.Linear(2*self.fc_inp_dim, self.fc_dim),
@@ -354,8 +355,42 @@ The (word) CNN based architecture as propsoed by Kim, et.al(2014)
 class Kim_CNN(nn.Module):
     def __init__(self, config):
         super(Kim_CNN, self).__init__()
+        self.D = config["embed_dim"]
+        self.C = config["n_classes"]
+        self.Ci = 1
+        self.Co = config["kernel_num"]
+        self.Ks = [int(k) for k in config["kernel_sizes"].split(',')]
 
+        # self.convs1 = [nn.Conv2d(Ci, Co, (K, D)) for K in Ks]
+        self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])
+        '''
+        self.conv13 = nn.Conv2d(Ci, Co, (3, D))
+        self.conv14 = nn.Conv2d(Ci, Co, (4, D))
+        self.conv15 = nn.Conv2d(Ci, Co, (5, D))
+        '''
+        self.dropout = nn.Dropout(config["dropout"])
+        
+    def conv_and_pool(self, x, conv):
+        x = F.relu(conv(x)).squeeze(3)  # (B, Co, L)
+        x = F.max_pool1d(x, x.size(2)).squeeze(2)
+        return x
 
-    def forward(self, input):
+    def forward(self, x):
+        # x is (B, L, D)
 
-        return None
+        x = x.unsqueeze(1)  # (B, Ci, L, D)
+
+        x = [F.relu(conv(x)).squeeze(3) for conv in self.convs1]  # [(B, Co, L), ...]*len(Ks)
+
+        x = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x]  # [(B, Co), ...]*len(Ks)
+
+        x = torch.cat(x, 1)
+
+        '''
+        x1 = self.conv_and_pool(x,self.conv13) #(N,Co)
+        x2 = self.conv_and_pool(x,self.conv14) #(N,Co)
+        x3 = self.conv_and_pool(x,self.conv15) #(N,Co)
+        x = torch.cat((x1, x2, x3), 1) # (N,len(Ks)*Co)
+        '''
+        x = self.dropout(x)  # (B, len(Ks)*Co)
+        return x
