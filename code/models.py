@@ -110,9 +110,9 @@ class WeightDrop_manual(torch.nn.Module):
 Main class that controls training and calling of other classes based on corresponding model_name
 
 """
-class Doc_Classifier(nn.Module):
+class Document_Classifier(nn.Module):
     def __init__(self, config, pre_trained_embeds = None):
-        super(Doc_Classifier, self).__init__()
+        super(Document_Classifier, self).__init__()
 
         self.lstm_dim = config['lstm_dim']
         self.model_name = config['model_name']
@@ -134,27 +134,25 @@ class Doc_Classifier(nn.Module):
             self.encoder = BiLSTM_reg(config)
             self.fc_inp_dim = config['lstm_dim']
         elif self.model_name == 'han':
-            self.encoder = HAN_main(config)
+            self.encoder = HAN(config)
             self.fc_inp_dim = config['sent_gru_dim']
         elif self.model_name == 'cnn':
             self.encoder = Kim_CNN(config)
             self.fc_inp_dim = int(config["kernel_num"]*len(config["kernel_sizes"].split(','))/2)
 
 
-        self.classifier = nn.Sequential(nn.Linear(2*self.fc_inp_dim, self.fc_dim),
+        if self.model_name in ['bilstm' , 'bilstm_pool']:
+            self.classifier = nn.Sequential(nn.Linear(2*self.fc_inp_dim, self.fc_dim),
                                                 nn.ReLU(),
                                                 nn.Linear(self.fc_dim, self.num_classes))
-        self.drop = nn.Dropout(config['dropout'])
 
     def forward(self, inp, lens):
-        if not self.model_name == 'bilstm_reg' and not self.model_name == 'han':
+        if self.model_name in ['bilstm' , 'bilstm_pool']:
             inp = self.embedding(inp)
             out = self.encoder(inp, lens)
             out = self.classifier(out)
         else:
             out = self.encoder(inp, self.embedding, lens)
-            out = self.drop(out.to(device))
-            out = self.classifier(out)
         return out
 
 
@@ -203,15 +201,18 @@ class BiLSTM_reg(nn.Module):
         self.ar = 0.0
         self.beta_ema = config["beta_ema"]  # Temporal averaging
         self.wdrop = config["wdrop"]  # Weight dropping
-        self.embed_droprate = config["embed_drop"]  # Embedding dropout
+        self.embed_droprate = config["embed_drop"]  # Embedding dropouts
+        self.dropout = config['dropout']
+        self.lstm_dim = config['lstm_dim']
+        self.embed_dim = config['embed_dim']
+        self.num_classes = config['n_classes']
 
-        self.lstm = nn.LSTM(config["embed_dim"], config["lstm_dim"], bidirectional = True, dropout=config["dropout"], num_layers=1, batch_first=False).to(device)
+        self.lstm = nn.LSTM(self.embed_dim, self.lstm_dim, bidirectional = True, dropout=config["dropout"], num_layers=1, batch_first=False).to(device)
+        self.classifier = nn.Sequential(nn.Dropout(self.dropout) , nn.Linear(2*self.lstm_dim, 2*self.lstm_dim), nn.ReLU(), nn.Linear(2*self.lstm_dim, self.num_classes))
 
         # Applyying Weight dropout to hh_l0 layer of the LSTM
         weights = ['weight_hh_l0']
         self.lstm = WeightDrop(self.lstm, weights, self.wdrop).to(device)
-
-        self.dropout = nn.Dropout(config['dropout'])
 
         if self.beta_ema>0:
             self.avg_param = deepcopy(list(p.data for p in self.parameters()))
@@ -238,9 +239,7 @@ class BiLSTM_reg(nn.Module):
         out, _ = torch.max(out, 0)
         _, unsorted_idxs = torch.sort(sorted_idxs)
         out = out[unsorted_idxs, :].to(device)
-        
-        if self.tar or self.ar:
-            return out, all_states
+        out = self.classifier(out)
         return out
 
 
@@ -269,85 +268,140 @@ class BiLSTM_reg(nn.Module):
 """
 The heirarchical attention network working on word and sentence level attention
 """
-class HAN_main(nn.Module):
-    def __init__(self, config):
-        super(HAN_main, self).__init__()
-        self.word_attn = HAN_word_attention(config)
-        self.sentence_attn = HAN_sentence_attention(config)
+# class HAN_main(nn.Module):
+#     def __init__(self, config):
+#         super(HAN_main, self).__init__()
+#         self.word_attn = HAN_word_attention(config)
+#         self.sentence_attn = HAN_sentence_attention(config)
+#         self.classifier = nn.Linear(2*config['sent_gru_dim'], config['n_classes'])
 
+#     def forward(self, inp, embedding, length):
+#         inp = inp.permute(1,2,0)
+#         num_sents = inp.size(0)
+#         sent_representations = None
+#         for i in range(num_sents):
+#             word_attn_outs = self.word_attn(inp[i, :], embedding)
+#             if sent_representations is None:
+#                 sent_representations = word_attn_outs
+#             else:
+#                 torch.cat((sent_representations, word_attn_outs), dim=0)
+
+#         sent_attn_outs = self.sentence_attn(sent_representations)
+#         out = self.classifier(sent_attn_outs)
+#         return out
+
+
+# class HAN_word_attention(nn.Module):
+#     def __init__(self, config):
+#         super(HAN_word_attention, self).__init__()
+#         self.word_hidden_dim = config['word_gru_dim']
+#         self.embed_dim = config['embed_dim']
+#         self.context_weights = nn.Parameter(torch.rand(2*self.word_hidden_dim, 1))
+#         self.context_weights.data.uniform_(-0.25, 0.25)
+#         self.gru = nn.GRU(self.embed_dim, self.word_hidden_dim, bidirectional = True)
+#         self.lin_projection = nn.Sequential(nn.Linear(2*self.word_hidden_dim, 2*self.word_hidden_dim), nn.Tanh())
+#         self.attn_wts = nn.Softmax()
+
+#     def forward(self, inp, embedding):
+#         # print(inp.shape)
+#         inp = embedding(inp)
+#         # print(inp.shape)
+#         all_states_words, _ = self.gru(inp)
+#         # print(all_states_words.shape)
+#         out = self.lin_projection(all_states_words)
+#         # print(out.shape)
+#         out = torch.matmul(out, self.context_weights)
+#         # print(out.shape)
+#         out = out.squeeze(dim=2)
+#         # print(out.shape)
+#         out = self.attn_wts(out.transpose(1, 0))
+#         # print(out.shape)
+#         out = torch.mul(all_states_words.permute(2, 0, 1), out.transpose(1, 0))
+#         # print(out.shape)
+#         out = torch.sum(out, dim=1).transpose(1, 0).unsqueeze(0)
+#         # print(out.shape)
+#         return out
+
+
+# class HAN_sentence_attention(nn.Module):
+#     def __init__(self, config):
+#         super(HAN_sentence_attention, self).__init__()
+#         self.word_hidden_dim = config['word_gru_dim']
+#         self.sent_hidden_dim = config['sent_gru_dim']
+#         self.embed_dim = config['embed_dim']
+#         self.context_weights = nn.Parameter(torch.rand(2*self.sent_hidden_dim, 1))
+#         self.context_weights.data.uniform_(-0.1, 0.1)
+#         self.gru = nn.GRU(2*self.word_hidden_dim, self.sent_hidden_dim, bidirectional = True)
+#         self.lin_projection = nn.Sequential(nn.Linear(2*self.sent_hidden_dim, 2*self.sent_hidden_dim), nn.Tanh())
+#         self.attn_wts = nn.Softmax()
+
+#     def forward(self, inp):
+#         all_states_sents,_ = self.gru(inp)
+#         out = self.lin_projection((all_states_sents))
+#         out = torch.matmul(out, self.context_weights)
+#         out = out.squeeze(dim=2)
+#         out = self.attn_wts(out.transpose(1,0))
+#         out = torch.mul(all_states_sents.permute(2, 0, 1), out.transpose(1, 0))
+#         out = torch.sum(out, dim=1).transpose(1, 0).unsqueeze(0)
+#         return out.squeeze(0)
+
+
+class HAN(nn.Module):
+    def __init__(self, config):
+        super(HAN, self).__init__()
+        self.word_hidden_dim = config['word_gru_dim']
+        self.embed_dim = config['embed_dim']
+        self.num_classes = config['n_classes']
+
+        # Word attention
+        self.word_context_weights = nn.Parameter(torch.rand(2*self.word_hidden_dim, 1))
+        self.word_context_weights.data.uniform_(-0.25, 0.25)
+        self.word_attn_gru = nn.GRU(self.embed_dim, self.word_hidden_dim, bidirectional = True)
+        self.word_lin_projection = nn.Sequential(nn.Linear(2*self.word_hidden_dim, 2*self.word_hidden_dim), nn.Tanh())
+        self.word_attn_wts = nn.Softmax()
+
+        # Sentence attention
+        self.sent_hidden_dim = config['sent_gru_dim']
+        self.sent_context_weights = nn.Parameter(torch.rand(2*self.sent_hidden_dim, 1))
+        self.sent_context_weights.data.uniform_(-0.1, 0.1)
+        self.sentence_attn_gru = nn.GRU(2*self.word_hidden_dim, self.sent_hidden_dim, bidirectional = True, batch_first = False)
+        self.sent_lin_projection = nn.Sequential(nn.Linear(2*self.sent_hidden_dim, 2*self.sent_hidden_dim), nn.Tanh())
+        self.sent_attn_wts = nn.Softmax()
+
+        self.classifier = nn.Linear(2*self.sent_hidden_dim, self.num_classes)
 
     def forward(self, inp, embedding, length):
         inp = inp.permute(1,2,0)
-        # print(inp.shape)
         num_sents = inp.size(0)
         sent_representations = None
+
+        # Word-attention block
         for i in range(num_sents):
-            word_attn_outs = self.word_attn(inp[i, :], embedding)
+            model_inp = inp[i, :]
+            model_inp = embedding(model_inp)
+            all_states_words, _ = self.word_attn_gru(model_inp)
+            out = self.word_lin_projection(all_states_words)
+            out = torch.matmul(out, self.word_context_weights)
+            out = out.squeeze(dim=2)
+            out = self.word_attn_wts(out.transpose(1, 0))
+            out = torch.mul(all_states_words.permute(2, 0, 1), out.transpose(1, 0))
+            word_attn_outs = torch.sum(out, dim=1).transpose(1, 0).unsqueeze(0)
             if sent_representations is None:
                 sent_representations = word_attn_outs
             else:
-                torch.cat((sent_representations, word_attn_outs), dim=0)
+                sent_representations =  torch.cat((sent_representations, word_attn_outs), dim=0)
 
-        sent_attn_outs = self.sentence_attn(sent_representations)
-        return sent_attn_outs
-
-
-class HAN_word_attention(nn.Module):
-    def __init__(self, config):
-        super(HAN_word_attention, self).__init__()
-        self.word_hidden_dim = config['word_gru_dim']
-        self.embed_dim = config['embed_dim']
-        self.context_weights = nn.Parameter(torch.rand(2*self.word_hidden_dim, 1))
-        self.context_weights.data.uniform_(-0.25, 0.25)
-        self.gru = nn.GRU(self.embed_dim, self.word_hidden_dim, bidirectional = True)
-        self.lin_projection = nn.Sequential(nn.Linear(2*self.word_hidden_dim, 2*self.word_hidden_dim), nn.Tanh())
-        self.attn_wts = nn.Softmax()
-
-
-    def forward(self, inp, embedding):
-        # print(inp.shape)
-        inp = embedding(inp)
-        # print(inp.shape)
-        all_states_words, _ = self.gru(inp)
-        # print(all_states_words.shape)
-        out = self.lin_projection(all_states_words)
-        # print(out.shape)
-        out = torch.matmul(out, self.context_weights)
-        # print(out.shape)
+        # Sentence-attention Block
+        all_states_sents,_ = self.sentence_attn_gru(sent_representations)
+        out = self.sent_lin_projection((all_states_sents))
+        out = torch.matmul(out, self.sent_context_weights)
         out = out.squeeze(dim=2)
-        # print(out.shape)
-        out = self.attn_wts(out.transpose(1, 0))
-        # print(out.shape)
-        out = torch.mul(all_states_words.permute(2, 0, 1), out.transpose(1, 0))
-        # print(out.shape)
-        out = torch.sum(out, dim=1).transpose(1, 0).unsqueeze(0)
-        # print(out.shape)
-        return out
-
-
-class HAN_sentence_attention(nn.Module):
-    def __init__(self, config):
-        super(HAN_sentence_attention, self).__init__()
-        self.word_hidden_dim = config['word_gru_dim']
-        self.sent_hidden_dim = config['sent_gru_dim']
-        self.embed_dim = config['embed_dim']
-        self.context_weights = nn.Parameter(torch.rand(2*self.sent_hidden_dim, 1))
-        self.context_weights.data.uniform_(-0.1, 0.1)
-        self.gru = nn.GRU(2*self.word_hidden_dim, self.sent_hidden_dim, bidirectional = True)
-        self.lin_projection = nn.Sequential(nn.Linear(2*self.sent_hidden_dim, 2*self.sent_hidden_dim), nn.Tanh())
-        self.attn_wts = nn.Softmax()
-
-
-    def forward(self, inp):
-
-        all_states_sents,_ = self.gru(inp)
-        out = self.lin_projection((all_states_sents))
-        out = torch.matmul(out, self.context_weights)
-        out = out.squeeze(dim=2)
-        out = self.attn_wts(out.transpose(1,0))
+        out = self.sent_attn_wts(out.transpose(1,0))
         out = torch.mul(all_states_sents.permute(2, 0, 1), out.transpose(1, 0))
         out = torch.sum(out, dim=1).transpose(1, 0).unsqueeze(0)
-        return out.squeeze(0)
+        out = out.squeeze(0)
+        sent_attn_out = self.classifier(out)
+        return sent_attn_out
 
 
 """
@@ -356,27 +410,25 @@ The (word) CNN based architecture as propsoed by Kim, et.al(2014)
 class Kim_CNN(nn.Module):
     def __init__(self, config):
         super(Kim_CNN, self).__init__()
-        self.D = config["embed_dim"]
-        self.C = config["n_classes"]
-        self.Ci = 1
-        self.Co = config["kernel_num"]
-        self.Ks = [int(k) for k in config["kernel_sizes"].split(',')]
+        self.embed_dim = config["embed_dim"]
+        self.num_classes = config["n_classes"]
+        self.input_channels = 1
+        self.num_kernels = config["kernel_num"]
+        self.kernel_sizes = [int(k) for k in config["kernel_sizes"].split(',')]
+        self.fc_inp_dim = self.num_kernels * len(self.kernel_sizes)
+        self.fc_dim = config['fc_dim']
 
-        # self.convs1 = [nn.Conv2d(Ci, Co, (K, D)) for K in Ks]
-        self.convs1 = nn.ModuleList([nn.Conv2d(self.Ci, self.Co, (K, self.D)) for K in self.Ks])
-        self.dropout = nn.Dropout(config["dropout"])
-        
-    def conv_and_pool(self, x, conv):
-        # x = F.relu(conv(x)).squeeze(3)  # (B, Co, L)
-        # x = F.max_pool1d(x, x.size(2)).squeeze(2)
-        return x
+        self.cnn = nn.ModuleList([nn.Conv2d(self.input_channels, self.num_kernels, (k_size, self.embed_dim)) for k_size in self.kernel_sizes])
+        self.classifier = nn.Sequential(nn.Dropout(config["dropout"]), nn.Linear(self.fc_inp_dim, self.fc_dim), nn.ReLU(), nn.Linear(self.fc_dim, self.num_classes))
 
-    def forward(self, inp, lens):
+
+    def forward(self, inp, embedding, lengths=None):
         # x is (B, L, D)
+        inp = embedding(inp)
         inp = inp.permute(1,0,2)
         inp = inp.unsqueeze(1)  # (B, Ci, L, D)
-        inp = [F.relu(conv(inp)).squeeze(3) for conv in self.convs1]  # [(B, Co, L), ...]*len(Ks)
+        inp = [F.relu(conv(inp)).squeeze(3) for conv in self.cnn]  # [(B, Co, L), ...]*len(Ks)
         inp = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in inp]  # [(B, Co), ...]*len(Ks)
-        out = torch.cat(inp, 1)
-        out = self.dropout(out)  # (B, len(Ks)*Co)
+        out = torch.cat(inp, 1) # (B, len(Ks)*Co)
+        out = self.classifier(out)
         return out

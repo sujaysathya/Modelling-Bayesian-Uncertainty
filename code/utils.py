@@ -25,7 +25,7 @@ while True:
 
 def prepare_training(config, classes):
 
-    print("="*80 + "\n\t\t\t\t Preparing Data\n" + "="*80)
+    print("="*100 + "\n\t\t\t\t\t Preparing Data\n" + "="*100)
     start = time.time()
 
     if config['model_name'] == 'han':

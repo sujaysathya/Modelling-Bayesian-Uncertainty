@@ -160,11 +160,12 @@ class Reuters(TabularDataset):
 class Reuters_HAN(Reuters):
     NESTING = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string)
     TEXT = NestedField(NESTING, tokenize=split_sents, include_lengths = True)
+    LABEL = Field(sequential=False, use_vocab=False, batch_first=True, preprocessing=process_labels)
 
 
 class Reuters_CNN(Reuters):
     TEXT = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
-    LABEL = Field(sequential=False, use_vocab=True, batch_first=False, preprocessing=process_labels)
+    LABEL = Field(sequential=False, use_vocab=True, batch_first=True, preprocessing=process_labels)
 
 
 

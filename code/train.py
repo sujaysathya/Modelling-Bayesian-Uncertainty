@@ -61,18 +61,18 @@ def eval_network(model, test = False):
 
 
 def train_network():
-    print("\n\n"+ "="*80 + "\n\t\t\t\t Training Network\n" + "="*80)
+    print("\n\n"+ "="*100 + "\n\t\t\t\t\t Training Network\n" + "="*100)
 
     # Seeds for reproduceable runs
-    torch.manual_seed(42)
-    torch.cuda.manual_seed(42)
-    np.random.seed(42)
-    random.seed(42)
+    torch.manual_seed(config['seed'])
+    torch.cuda.manual_seed(config['seed'])
+    np.random.seed(config['seed'])
+    random.seed(config['seed'])
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
     # Initialize the model, optimizer and loss function
-    model = Doc_Classifier(config, pre_trained_embeds = TEXT.vocab.vectors).to(device)
+    model = Document_Classifier(config, pre_trained_embeds = TEXT.vocab.vectors).to(device)
     if config['optimizer'] == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], weight_decay = config['weight_decay'])
     elif config['optimizer'] == 'SGD':
@@ -112,7 +112,6 @@ def train_network():
 
         for iters, batch in enumerate(train_loader):
             model.train()
-            # print("batch  = ", batch.text[0])
             # lr_scheduler.step()
             preds = model(batch.text[0].to(device), batch.text[1].to(device))
             loss = F.binary_cross_entropy_with_logits(preds, batch.label.float())
@@ -142,7 +141,7 @@ def train_network():
                 writer.add_scalar('Train/f1', sum(train_f1_score)/len(train_f1_score), ((iters+1)+total_iters))
                 writer.add_scalar('Train/accuracy', sum(train_accuracy_score)/len(train_accuracy_score), ((iters+1)+total_iters))
 
-                for name, param in model.named_parameters():
+                for name, param in model.encoder.named_parameters():
                     if not param.requires_grad:
                         continue
                     writer.add_histogram('iters/'+name, param.data.view(-1), global_step= ((iters+1)+total_iters))
@@ -216,11 +215,12 @@ def train_network():
 
 
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # Required Paths
     parser.add_argument('--reuters_path', type = str, default = '../data',
-                          help='path to reuters data (raw data)')
+                          help='path to reuters data folder that contains the files (raw data)')
     parser.add_argument('--glove_path', type = str, default = '../data/glove/glove.840B.300d.txt',
                           help='path for Glove embeddings (850B, 300D)')
     parser.add_argument('--model_checkpoint_path', type = str, default = './model_checkpoints',
@@ -231,7 +231,7 @@ if __name__ == '__main__':
                        help = 'saved model name')
 
     # Training Params
-    parser.add_argument('--model_name', type = str, default = 'cnn',
+    parser.add_argument('--model_name', type = str, default = 'han',
                           help='model name: bilstm / bilstm_pool / bilstm_reg / han / cnn')
     parser.add_argument('--lr', type = float, default = 0.01,
                           help='Learning rate for training')
@@ -239,13 +239,13 @@ if __name__ == '__main__':
                           help='batch size for training"')
     parser.add_argument('--embed_dim', type = int, default = 300,
                           help='dimension of word embeddings used(GLove)"')
-    parser.add_argument('--lstm_dim', type = int, default = 512,
+    parser.add_argument('--lstm_dim', type = int, default = 256,
                           help='dimen of hidden unit of LSTM/BiLSTM networks"')
     parser.add_argument('--word_gru_dim', type = int, default = 50,
                           help='dimen of hidden unit of word-level attn GRU units of HAN"')
     parser.add_argument('--sent_gru_dim', type = int, default = 50,
                           help='dimen of hidden unit of sentence-level attn GRU units of HAN"')
-    parser.add_argument('--fc_dim', type = int, default = 256,
+    parser.add_argument('--fc_dim', type = int, default = 128,
                           help='dimen of FC layer"')
     parser.add_argument('--n_classes', type = int, default = 90,
                           help='number of classes"')
@@ -277,6 +277,8 @@ if __name__ == '__main__':
                         help='number of each kind of kernel')
     parser.add_argument('-kernel-sizes', type=str, default='3,4,5', 
                         help='comma-separated kernel size to use for convolution')
+    parser.add_argument('-seed', type=int, default=42,
+                        help='set seed for reproducability')
 
     args, unparsed = parser.parse_known_args()
     config = args.__dict__
