@@ -29,12 +29,17 @@ def prepare_training(config, classes):
     start = time.time()
 
     if config['model_name'] == 'han':
-        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader = Reuters_HAN.main_handler(config, config['reuters_path'], shuffle=True)
+        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters_HAN.main_handler(config, config['reuters_path'], shuffle=True)
     else:
-        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader = Reuters.main_handler(config, config['reuters_path'], shuffle=True)
+        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters.main_handler(config, config['reuters_path'], shuffle=True)
 
     vocab_size = len(TEXT.vocab)
     config['vocab_size'] = vocab_size
+
+    # Creating class distributions for each set from the torchtext LABELs field
+    print("\n\n==>> Creating class distributions...")
+    train_sorted, val_sorted, test_sorted, train_sorted_idx, val_sorted_idx, test_sorted_idx = get_distributions(train_split, val_split, test_split)
+
 
     print("\n\nDATA STATISTICS:\n" + "-"*50)
     print("\nVocabulary size = ", vocab_size)
@@ -42,11 +47,16 @@ def prepare_training(config, classes):
     print('No. of train instances = ', len(train_batch_loader.dataset))
     print('No. of dev instances = ', len(dev_batch_loader.dataset))
     print('No. of test instances = ', len(test_batch_loader.dataset))
+    print("\nTop 5 training set classes by ratio:    Classes  {}   with % of  {}".format(str(train_sorted_idx[:5]+1), str(train_sorted[:5])))
+    print("Top 5 validation set classes by ratio:    Classes  {}   with % of  {}".format(str(val_sorted_idx[:5]+1), str(val_sorted[:5])))
+    print("Top 5 test set classes by ratio:    Classes  {}   with % of  {}".format(str(test_sorted_idx[:5]+1), str(test_sorted[:5])))
+
 
     # Custom wrapper over the iterators
     # train_batch_loader = ReutersBatchGenerator(train_batch_loader)
     # dev_batch_loader = ReutersBatchGenerator(dev_batch_loader)
     # test_batch_loader = ReutersBatchGenerator(test_batch_loader)
+
 
     end = time.time()
     hours, minutes, seconds = calc_elapsed_time(start, end)
@@ -60,6 +70,34 @@ def calc_elapsed_time(start, end):
     minutes, seconds = divmod(rem, 60)
     time_mins, _ = divmod(time_rem, 60)
     return int(hours), int(minutes), seconds
+
+
+
+def get_distributions(train_split, val_split, test_split):
+    train_distrib, val_distrib, test_distrib = np.zeros((len(train_split), 90)), np.zeros((len(val_split), 90)), np.zeros((len(test_split), 90))
+    sets = ['train_split', 'val_split', 'test_split']
+    dists = ['train_distrib', 'val_distrib', 'test_distrib']
+    sorts = ['train_sorted', 'val_sorted', 'test_sorted']
+    sorted_idx = ['train_sorted_idx', 'val_sorted_idx', 'test_sorted_idx']
+    train_sorted, val_sorted, test_sorted = [], [], []
+    train_sorted_idx, val_sorted_idx, test_sorted_idx = [], [], []
+
+    for s in range(len(sets)):
+        st = eval(sets[s])
+        for i in range(len(st)):
+            eval(dists[s])[i, :] = eval(sets[s])[i].label
+
+    for i in range(len(sets)):
+        temp = []
+        # print("\nClass distributions for  {}\n".format(sets[i]) + "-"*40)
+        all_classes_sum = np.sum(eval(dists[i]), axis =0)
+        for j in range(90):
+            this_class_ratio = all_classes_sum[j]/len(eval(sets[i]))
+            # print("Class {0}:   {1:.4f} %".format(j+1, this_class_ratio*100))
+            temp.append(this_class_ratio)
+        eval(sorts[i]).append(-np.sort(-np.array(temp)))
+        eval(sorted_idx[i]).append(np.argsort(-np.array(temp)))
+    return train_sorted[0]*100, val_sorted[0]*100, test_sorted[0]*100, train_sorted_idx[0], val_sorted_idx[0], test_sorted_idx[0]
 
 
 

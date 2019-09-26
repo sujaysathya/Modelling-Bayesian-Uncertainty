@@ -154,7 +154,7 @@ class Reuters(TabularDataset):
         print("\n==>> Preparing Iterators....")
         train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
                                      sort_within_batch=True, device=device)
-        return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter
+        return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter, train, val, test
 
 
 class Reuters_HAN(Reuters):
