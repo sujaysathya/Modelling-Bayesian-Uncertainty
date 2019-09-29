@@ -40,9 +40,6 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
     return X
 
 
-
-
-
 class WeightDrop_manual(torch.nn.Module):
     def __init__(self, module, weights, dropout=0, variational=False):
         super().__init__()

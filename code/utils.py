@@ -21,35 +21,52 @@ while True:
         maxInt = int(maxInt/2)
 
 
+# For printing cleaner numpy arrays
+float_formatter = lambda x: "%.3f" % x
+np.set_printoptions(formatter={'float_kind':float_formatter})
 
-
-def prepare_training(config, classes):
+def prepare_training(config):
 
     print("="*100 + "\n\t\t\t\t\t Preparing Data\n" + "="*100)
     start = time.time()
 
-    if config['model_name'] == 'han':
-        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters_HAN.main_handler(config, config['reuters_path'], shuffle=True)
+    if config['data_name'] == 'reuters':
+        if config['model_name'] == 'han':
+            TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters_HAN.main_handler(config, config['data_path'], shuffle=True)
+        else:
+            TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters.main_handler(config, config['data_path'], shuffle=True)
     else:
-        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters.main_handler(config, config['reuters_path'], shuffle=True)
+        if config['model_name'] == 'han':
+            TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = IMDB_HAN.main_handler(config, config['data_path'], shuffle=True)
+        else:
+            TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = IMDB.main_handler(config, config['data_path'], shuffle=True)
 
     vocab_size = len(TEXT.vocab)
     config['vocab_size'] = vocab_size
 
     # Creating class distributions for each set from the torchtext LABELs field
     print("\n\n==>> Creating class distributions...")
-    train_sorted, val_sorted, test_sorted, train_sorted_idx, val_sorted_idx, test_sorted_idx = get_distributions(train_split, val_split, test_split)
+    train_sorted, val_sorted, test_sorted, train_sorted_idx, val_sorted_idx, test_sorted_idx = get_distributions(config, train_split, val_split, test_split)
 
 
-    print("\n\nDATA STATISTICS:\n" + "-"*50)
+    print("\n\n" + "-"*50 + "\nDATA STATISTICS:\n" + "-"*50)
     print("\nVocabulary size = ", vocab_size)
     print('No. of target classes = ', train_batch_loader.dataset.NUM_CLASSES)
     print('No. of train instances = ', len(train_batch_loader.dataset))
     print('No. of dev instances = ', len(dev_batch_loader.dataset))
     print('No. of test instances = ', len(test_batch_loader.dataset))
-    print("\nTop 5 training set classes by ratio:    Classes  {}   with % of  {}".format(str(train_sorted_idx[:5]+1), str(train_sorted[:5])))
-    print("Top 5 validation set classes by ratio:    Classes  {}   with % of  {}".format(str(val_sorted_idx[:5]+1), str(val_sorted[:5])))
-    print("Top 5 test set classes by ratio:    Classes  {}   with % of  {}".format(str(test_sorted_idx[:5]+1), str(test_sorted[:5])))
+    print("\nTop 10 training set classes by ratio:    Classes  {}   with % of  {}".format(str(train_sorted_idx[:5]+1), train_sorted[:5]))
+    print("Top 10 validation set classes by ratio:    Classes  {}   with % of  {}".format(str(val_sorted_idx[:5]+1), val_sorted[:5]))
+    print("Top 10 test set classes by ratio:    Classes  {}   with % of  {}".format(str(test_sorted_idx[:5]+1), test_sorted[:5]))
+    print("\nTop 10 RARE training set classes by ratio:    Classes  {}   with % of  {}".format(str(train_sorted_idx[-5:]+1), train_sorted[-5:]))
+    print("Top 10 RARE validation set classes by ratio:    Classes  {}   with % of  {}".format(str(val_sorted_idx[-5:]+1), val_sorted[-5:]))
+    print("Top 10 RARE test set classes by ratio:    Classes  {}   with % of  {}".format(str(test_sorted_idx[-5:]+1), test_sorted[-5:]))
+    zero = sorted([train_sorted_idx[i] for i,x in enumerate(train_sorted) if x<1e-3])
+    print("\nClasses with zero support in training set = {}".format(zero))
+    zero = sorted([val_sorted_idx[i] for i,x in enumerate(val_sorted) if x < 1e-3])
+    print("Classes with zero support in validation set = {}".format(zero))
+    zero = sorted([test_sorted_idx[i] for i,x in enumerate(test_sorted) if x < 1e-3])
+    print("Classes with zero support in test set = {}".format(zero))
 
 
     # Custom wrapper over the iterators
@@ -73,8 +90,10 @@ def calc_elapsed_time(start, end):
 
 
 
-def get_distributions(train_split, val_split, test_split):
-    train_distrib, val_distrib, test_distrib = np.zeros((len(train_split), 90)), np.zeros((len(val_split), 90)), np.zeros((len(test_split), 90))
+def get_distributions(config, train_split, val_split, test_split):
+    classes = 90 if config['data_name'] == 'reuters' else 10
+
+    train_distrib, val_distrib, test_distrib = np.zeros((len(train_split), classes)), np.zeros((len(val_split), classes)), np.zeros((len(test_split), classes))
     sets = ['train_split', 'val_split', 'test_split']
     dists = ['train_distrib', 'val_distrib', 'test_distrib']
     sorts = ['train_sorted', 'val_sorted', 'test_sorted']
@@ -91,7 +110,7 @@ def get_distributions(train_split, val_split, test_split):
         temp = []
         # print("\nClass distributions for  {}\n".format(sets[i]) + "-"*40)
         all_classes_sum = np.sum(eval(dists[i]), axis =0)
-        for j in range(90):
+        for j in range(classes):
             this_class_ratio = all_classes_sum[j]/len(eval(sets[i]))
             # print("Class {0}:   {1:.4f} %".format(j+1, this_class_ratio*100))
             temp.append(this_class_ratio)

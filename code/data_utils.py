@@ -169,6 +169,63 @@ class Reuters_CNN(Reuters):
 
 
 
+##############################################
+## Class to manage IMDB data pre-processing ##
+##############################################
+
+class IMDB(TabularDataset):
+    TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=False, batch_first=False, preprocessing=process_labels)
+    NUM_CLASSES = 10
+
+    @staticmethod
+    def sort_key(ex):
+        return len(ex.text)
+
+    @classmethod
+    def get_dataset_splits(cls, data_dir, train=os.path.join('imdb', 'train.tsv'),
+               validation=os.path.join('imdb', 'dev.tsv'),
+               test=os.path.join('imdb', 'test.tsv'), **kwargs):
+
+        return super(IMDB, cls).splits(
+            data_dir, train=train, validation=validation, test=test,
+            format='tsv', fields=[('label', cls.LABEL), ('text', cls.TEXT)])
+
+    @classmethod
+    def main_handler(cls, config, data_dir, shuffle=True):
+
+        # Getting Data Splits: train, dev, test
+        print("\n\n==>> Loading Data splits and tokenizing each document....")
+        train, val, test = cls.get_dataset_splits(data_dir)
+
+        # Build Vocabulary and obtain embeddings for each word in Vocabulary
+        print("\n==>> Building Vocabulary and obtaining embeddings....")
+        glove_embeds = torchtext.vocab.Vectors(name= config['glove_path'], max_vectors = int(4e5))
+        cls.TEXT.build_vocab(train, val, test, vectors=glove_embeds)
+
+        # Setting 'unk' token as the average of all other embeddings
+        if config['model_name'] != 'han':
+            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(cls.TEXT.vocab.vectors, dim=0)
+
+        # Getting iterators for each set
+        print("\n==>> Preparing Iterators....")
+        train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
+                                     sort_within_batch=False, device=device)
+        return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter, train, val, test
+
+
+class IMDB_HAN(IMDB):
+    NESTING = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string)
+    TEXT = NestedField(NESTING, tokenize=split_sents, include_lengths = True)
+    LABEL = Field(sequential=False, use_vocab=False, batch_first=True, preprocessing=process_labels)
+
+
+class IMDB_CNN(IMDB):
+    TEXT = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=True, batch_first=True, preprocessing=process_labels)
+
+
+
 class ReutersBatchGenerator():
     def __init__(self, bucket_iterator, text_field = 'text', label_field = 'label'):
         self.bucket_iterator = bucket_iterator
