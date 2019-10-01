@@ -38,19 +38,20 @@ def eval_network(model, test = False):
 
     eval_precision, eval_recall, eval_f1, eval_accuracy = [],[],[], []
     batch_loader = dev_loader if not test else test_loader
-    reps = 200 if (config['bayesian_mode'] and test) else 1
-    prediction_over_reps = []
+    reps = 500 if (config['bayesian_mode'] and test) else 1
+    class_means, class_std = torch.zeros(32,90), torch.zeros(32,90)
 
     with torch.no_grad():
         for iters, batch in enumerate(batch_loader):
+            rep_preds = []
             for i in range(reps):
                 preds = model(batch.text[0].to(device), batch.text[1].to(device))
                 # preds = (preds>0.5).type(torch.FloatTensor)
                 if config['data_name'] == 'reuters':
                     preds_rounded = F.sigmoid(preds).round().long()
                     true_labels = batch.label
-                    if preds.shape[0] == config['batch_size']:
-                        prediction_over_reps.append(F.sigmoid(preds))
+                    # if preds.shape[0] == config['batch_size']:
+                    rep_preds.append(F.sigmoid(preds))
                 else:
                     preds = F.softmax(preds)
                     preds_rounded = torch.max(preds, 1)[1]
@@ -61,13 +62,19 @@ def eval_network(model, test = False):
                 eval_precision.append(precision)
                 eval_recall.append(recall)
                 eval_accuracy.append(accuracy)
+            rep_preds = torch.stack(rep_preds)
+            batch_means = torch.mean(rep_preds, dim=0)
+            batch_std = torch.std(rep_preds, dim=0)
+            if iters == 0:
+                class_means = batch_means
+                class_std = batch_std
+            else:
+                class_means = torch.cat([class_means, batch_means], dim=0)
+                class_std = torch.cat([class_std, batch_std], dim=0)
         eval_precision = sum(eval_precision)/len(eval_precision)
         eval_recall = sum(eval_recall)/len(eval_recall)
         eval_f1 = sum(eval_f1)/len(eval_f1)
         eval_accuracy = sum(eval_accuracy)/len(eval_accuracy)
-        prediction_over_reps = torch.stack(prediction_over_reps[:-1])
-        class_means = torch.mean(prediction_over_reps, dim=(0,1))
-        class_std = torch.std(prediction_over_reps, dim=(0,1))
 
         if hasattr(model.encoder, 'beta_ema') and model.encoder.beta_ema > 0:
             # Temporal averaging
@@ -122,7 +129,8 @@ def train_network():
     MEANS, STD = [],[]
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
-    for epoch in range(start_epoch, config['max_epoch']+1):
+    # for epoch in range(start_epoch, config['max_epoch']+1):
+    for epoch in range(2):
         train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
         model.train()
 
@@ -190,7 +198,6 @@ def train_network():
                     'class_means': MEANS,
                     'class_std': STD,
                 }, os.path.join(config['model_checkpoint_path'], config['data_name'], config['model_name'], str(config['seed']), 'bayesian_uncertainties_val.pt'))
-        # eval_precision, precision_std, eval_recall, recall_std, eval_f1, f1_std, eval_accuracy, acc_std = eval_network(model)
 
         # print stats
         print_stats(config, epoch, sum(train_accuracy_score)/len(train_accuracy_score), sum(train_loss)/len(train_loss), sum(train_f1_score)/len(train_f1_score), eval_accuracy, eval_f1, start)
@@ -279,7 +286,7 @@ if __name__ == '__main__':
     # Training Params
     parser.add_argument('--data_name', type = str, default = 'reuters',
                           help='dataset name: reuters / imdb')
-    parser.add_argument('--model_name', type = str, default = 'bilstm_reg',
+    parser.add_argument('--model_name', type = str, default = 'cnn',
                           help='model name: bilstm / bilstm_pool / bilstm_reg / han / cnn')
     parser.add_argument('--lr', type = float, default = 0.01,
                           help='Learning rate for training')
@@ -458,5 +465,22 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("Keyboard interrupt by user detected...\nClosing the tensorboard writer!")
         writer.close()
-    # avg_score = {'cnn': {'val_f1': 0.85803025419576895, 'val_acc': 0.77504009265858875, 'test_f1': 0.84205949864969976, 'test_acc': 0.7664892344497608}, 'han': {'val_f1': 0.76189269303760143, 'val_acc': 0.68134800427655029, 'test_f1': 0.73217943233712146, 'test_acc': 0.65384569377990431}, 'bilstm': {'val_f1': 0.78325010569502784, 'val_acc': 0.6916384533143265, 'test_f1': 0.75549366575645127, 'test_acc': 0.67413875598086115}, 'bilstm_pool': {'val_f1': 0.84474823568092938, 'val_acc': 0.75460174625801846, 'test_f1': 0.8168646393382154, 'test_acc': 0.72799641148325356}, 'bilstm_reg': {'val_f1': 0.88083992584899617, 'val_acc': 0.80452601568068416, 'test_f1': 0.8616731153882411, 'test_acc': 0.78761961722488028}}
+
+    # avg_score = {'cnn': {'val_f1': 0.85803025419576895, 'val_acc': 0.77504009265858875, 'test_f1': 0.84205949864969976, 'test_acc': 0.7664892344497608},
+    # 'han': {'val_f1': 0.76189269303760143, 'val_acc': 0.68134800427655029, 'test_f1': 0.73217943233712146, 'test_acc': 0.65384569377990431},
+    # 'bilstm': {'val_f1': 0.78325010569502784, 'val_acc': 0.6916384533143265, 'test_f1': 0.75549366575645127, 'test_acc': 0.67413875598086115},
+    # 'bilstm_pool': {'val_f1': 0.84474823568092938, 'val_acc': 0.75460174625801846, 'test_f1': 0.8168646393382154, 'test_acc': 0.72799641148325356},
+    # 'bilstm_reg': {'val_f1': 0.88083992584899617, 'val_acc': 0.80452601568068416, 'test_f1': 0.8616731153882411, 'test_acc': 0.78761961722488028}}
     # pprint(avg_score)
+    # uncert = torch.load('./bayesian_uncertainties_val.pt', map_location=torch.device('cpu'))
+    # val_means = torch.stack(uncert['class_means'])
+    # val_std = torch.stack(uncert['class_std'])
+    # uncert = torch.load('./bayesian_uncertainties_test.pt', map_location=torch.device('cpu'))
+    # test_means = uncert['class_means']
+    # test_std = uncert['class_std']
+    # print(test_means.shape)
+    # print(val_means.shape)
+
+    # for i in range(len(val_means)):
+        # print("\nclass {}: \ntest_mean = {:.4f},    test_std = {:.4f}".format(i+1, val_means[0][i], val_std[0][i], test_means[i], test_std[i]))
+        # print("class {}: \nVal_mean = {:.4f},   val_std = {:.4f},    test_mean = {:.4f},    test_std = {:.4f}\n".format(i+1, val_means[30][i], val_std[30][i], test_means[i], test_std[i]))
