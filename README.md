@@ -5,7 +5,15 @@ Project for the course Deep Learning for Natural Language Processing
 
 In this task we classify the [ApteMod](https://www.kaggle.com/nltkdata/reuters/version/2) Reuters documents. It is a multi-class, multi-label classificaiton task with a granularity of 90 classes.
 
-We propose to compare performance of [HAN](https://www.aclweb.org/anthology/N16-1174.pdf), [Kim-CNN](https://arxiv.org/pdf/1408.5882.pdf) and [BiLSTM-regularized](https://www.aclweb.org/anthology/N19-1408.pdf)  at this task of multi label document classification. Our baseline models are vanilla BiLSTM and BiLSTM max-pooling-over-time variant.
+We propose to compare performance of [HAN](https://www.aclweb.org/anthology/N16-1174.pdf), [Kim-CNN](https://arxiv.org/pdf/1408.5882.pdf) and [BiLSTM-regularized](https://www.aclweb.org/anthology/N19-1408.pdf)  at this task of multi label document classification. Our baseline models are vanilla BiLSTM and BiLSTM max-pooling-over-time variant. The results are listed below:
+
+|                 | Dev (F1) | Test (F1) | Dev (accuracy) | Test (accuracy) | No. of parameters |
+|:---------------:|:--------:|:---------:|:--------------:|:---------------:|:-----------------:|
+|      BiLSTM     |   78.32  |   75.55   |      68.13     |      67.41      |     1,665,024     |
+| BiLSTM(maxpool) |   84.47  |   72.79   |      75.46     |      72.79      |     1,665,024     |
+|     Kim-CNN     |   85.8   |   84.2    |      77.05     |      76.65      |      462,336      |
+|      HAN        |   84.67  |   84.2    |      79.05     |      68.48      |      390,800      |
+|  BiLSTM(reg)    |   88.14  |   86.43   |      80.82     |      76.68      |     1,665,024     |
 
 We then proceed to perform uncertainty analysis of BiLSTM-regularized model using [MC Dropout](https://arxiv.org/pdf/1506.02142.pdf). This allows us to model the posterior instead of the likelihood using a Burnoulli prior. We measure the uncertainties by means of sampling 200 forward passes and reporting the mean and standard deviation of the prediciton scores to observe the model's behavior around the decision boundary.
 
