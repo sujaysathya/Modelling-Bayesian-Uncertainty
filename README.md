@@ -25,6 +25,8 @@ We can see that even though the mean is below the 0.5 mark and hence in likeliho
 
 [ApteMod](https://www.kaggle.com/nltkdata/reuters/version/2) is a collection of 10,788 documents from the Reuters financial newswire service, partitioned into a training set with 7769 documents and a test set with 3019 documents. In the ApteMod corpus, each document belongs to one or more categories. There are 90 categories in the corpus.
 
+Note, you do not have to download the dataset again. You can find the standard train, dev and test splits of the dataset in the `data/reuters_split` folder of this repository.
+
 ## Setting up the environment
 
 1. Run the command `conda create -n name_of_env_here python=3.7.3` to create a virtual environment for the project.
