@@ -33,6 +33,8 @@ Note, you do not have to download the dataset again. You can find the standard t
 2. Then run `conda activate name_of_env_just_created` to enter that virtual environment you just created.
 3. Install all the dependencies by running the command `pip install -r requirements.txt` after cloning this repository.
 
+***NOTE:*** before running Step3 above, you might have to install `torch` package as per the command [here](https://pytorch.org/get-started/locally/) based on your system. You can then run the command in Step3.
+
 It is advisable to maintain the hierarchy of folders as present here. However, if you change the structure of code make sure to be consistent with path arguments too.
 
 ## Code
