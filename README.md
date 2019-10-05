@@ -55,18 +55,39 @@ You can control all the necessary settings through the parser arguments of `trai
 #### Required Paths
 
 1. ***data_path***(str): path to dataset folder that contains the folders to reuters or imdb (raw data)
-2. 
-3. 
-4. 
-5. 
-6. 
+2. ***glove_path***(str): path for Glove embeddings (850B, 300D)
+3. ***model_checkpoint_path***(str): Directory for saving trained model checkpoints
+4. ***vis_path***(str): Directory for saving tensorboard checkpoints
+5. ***model_save_name***(str): saved model name
 
 #### Training parameters
 
-7.
-8.
-9.
-10.
+1. ***data_name***(str): dataset name: reuters / imdb
+2. ***model_name***(str): model name: bilstm / bilstm_pool / bilstm_reg / han / cnn
+3. ***lr***(float): default = 0.01, Learning rate for training
+4. ***batch_size***(int): default = 32, batch size for training
+5. ***embed_dim***(int): default = 300, dimension of word embeddings used(GLove)
+6. ***lstm_dim***(int); default = 256, dimen of hidden unit of LSTM/BiLSTM networks
+7. ***word_gru_dim***(int): default = 50, dimen of hidden unit of word-level attn GRU units of HAN
+8. ***sent_gru_dim***(int): default = 50, dimen of hidden unit of sentence-level attn GRU units of HAN
+9. ***fc_dim***(int): default = 128, dimen of FC layer
+10. ***n_classes***(int): default = 90, number of classes
+11. ***optimizer***(str): default = 'Adam', Optimizer to use for training
+12. ***weight_decay***(float): default = 0, weight decay for optimizer
+13. ***momentum***(float): default = 0.8, Momentum for optimizer
+14. ***max_epoch***(int): default = 50, Max epochs to train for
+15. ***val_split***(int): default = 0.1, Ratio of training data to be split into validation set
+16. ***lr_decay_step***(float): default = 2000, Number of steps after which learning rate should be decreased
+17. ***lr_decay_factor***(float): default = 0.2, Decay of learning rate of the optimizer
+18. ***lr_cut_off***(float): default = 1e-7, Lr lower bound to stop training
+19. ***beta_ema***(float): default = 0.99, Temporal Averaging smoothing co-efficient
+20. ***wdrop***(float): default = 0.2, Regularization - weight dropout
+21. ***embed_drop***(float): default = 0.1, Regularization - embedding dropout
+22. ***dropout***(float): default = 0.5, Regularization - dropout in LSTM cells
+23. ***kernel-num***(int): default=100, number of each kind of kernel
+24. ***kernel-sizes***(str): default='3,4,5', comma-separated kernel size to use for convolution
+25. ***seed***(int): default=2424, set seed for reproducability
+26. ***bayesian_mode***(bool): default=True, To run the model in Bayesian Uncertainty analysis mode or not
 
 
 ### Code Overview
