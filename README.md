@@ -92,6 +92,4 @@ You can control all the necessary settings through the parser arguments of `trai
 26. ***bayesian_mode***(bool): default=True, To run the model in Bayesian Uncertainty analysis mode or not
 
 
-### Code Overview
-
 
