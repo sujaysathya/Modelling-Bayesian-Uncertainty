@@ -17,7 +17,7 @@ We propose to compare performance of [HAN](https://www.aclweb.org/anthology/N16-
 
 We then proceed to perform uncertainty analysis of BiLSTM-regularized model using [MC Dropout](https://arxiv.org/pdf/1506.02142.pdf). This allows us to model the posterior instead of the likelihood using a Burnoulli prior. We measure the uncertainties by means of sampling 200 forward passes and reporting the mean and standard deviation of the prediciton scores to observe the model's behavior around the decision boundary. Uncertainty estimate of a subset of classes for one document of the test set is shown below:
 
-![Uncertainty - decision boundary](https://github.com/shaanchandra/DeepLearningForNLP/blob/master/uncert_dec_boundary.png)
+![Uncertainty - decision boundary](https://github.com/shaanchandra/Modelling-Bayesian-Uncertainty/blob/master/uncert_decision_boundary.png)
 
 We can see that even though the mean is below the 0.5 mark and hence in likelihood estimation the model will classify it correctly, the uncertainty estimate shows that the model is still not sure about this prediction. We can see that in some of the forward passes, the score was actually greater than 0.5 and hence misclassified.
 
