@@ -35,6 +35,10 @@ def prepare_training(config):
             TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters_HAN.main_handler(config, config['data_path'], shuffle=True)
         else:
             TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = Reuters.main_handler(config, config['data_path'], shuffle=True)
+    
+    elif config['data_name'] == 'cmu':
+        TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = CMU.main_handler(config, config['data_path'], shuffle=True)
+    
     else:
         if config['model_name'] == 'han':
             TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = IMDB_HAN.main_handler(config, config['data_path'], shuffle=True)
@@ -105,6 +109,8 @@ def get_distributions(config, train_split, val_split, test_split):
         st = eval(sets[s])
         for i in range(len(st)):
             eval(dists[s])[i, :] = eval(sets[s])[i].label
+            # print("this is what you want")
+            # print(st[i].label)
 
     for i in range(len(sets)):
         temp = []

@@ -130,7 +130,7 @@ def train_network():
     terminate_training = False
     print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
     # for epoch in range(start_epoch, config['max_epoch']+1):
-    for epoch in range(2):
+    for epoch in range(50):
         train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
         model.train()
 
