@@ -142,8 +142,8 @@ class Reuters(TabularDataset):
 
     @classmethod
     def get_dataset_splits(cls, data_dir, train='train.tsv',
-                           validation=os.path.join('reuters_split', 'dev.tsv'),
-                           test=os.path.join('reuters_split', 'test.tsv'), **kwargs):
+                           validation='dev.tsv',
+                           test='test.tsv', **kwargs):
 
         return super(Reuters, cls).splits(
             data_dir, train=train, validation=validation, test=test,
