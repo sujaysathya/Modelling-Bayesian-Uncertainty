@@ -1,4 +1,8 @@
-import os, torch, random, re, torchtext
+import os
+import torch
+import random
+import re
+import torchtext
 import numpy as np
 import nltk
 from nltk.corpus import reuters
@@ -15,9 +19,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #####################################
 
 def get_data_splits():
-    train_docs, train_labels = zip(*[(reuters.raw(i), reuters.categories(i)) for i in reuters.fileids() if i.startswith('training/')])
-    test_docs, test_labels = zip(*[(reuters.raw(i), reuters.categories(i)) for i in reuters.fileids() if i.startswith('test/')])
+    train_docs, train_labels = zip(*[(reuters.raw(i), reuters.categories(i))
+                                     for i in reuters.fileids() if i.startswith('training/')])
+    test_docs, test_labels = zip(*[(reuters.raw(i), reuters.categories(i))
+                                   for i in reuters.fileids() if i.startswith('test/')])
     return train_docs, train_labels, test_docs, test_labels
+
 
 def split_train_set(config, train_data, train_labels):
     val_size = int(np.ceil(config['val_split'] * len(train_data)))
@@ -32,17 +39,20 @@ def split_train_set(config, train_data, train_labels):
     val_y = [train_labels[i] for i in val_idx]
     return train_x, train_y, val_x, val_y
 
+
 def tokenize(dataset):
     tokenized_docs = []
     for i in tqdm(range(len(dataset))):
         tokenized_docs.append(nltk.word_tokenize(dataset[i]))
     return tokenized_docs
 
+
 def clean_string(string):
     string = re.sub(r"[^A-Za-z0-9(),!?\'`]", " ", string)
     string = re.sub(r"\s{2,}", " ", string)
     tokens = string.lower().strip().split()
     return tokens
+
 
 def clean_string_stop_words_remove(string):
     string = re.sub(r"[^A-Za-z0-9(),!?\'`]", " ", string)
@@ -54,19 +64,21 @@ def clean_string_stop_words_remove(string):
 
 
 def split_sents(string):
-    string = re.sub(r"[!?]"," ", string)
+    string = re.sub(r"[!?]", " ", string)
     return string.strip().split('.')
+
 
 def process_labels(string):
     return [float(x) for x in string]
 
 
 def binarize_labels(class_list, train, val, test):
-    labelencoder = MultiLabelBinarizer(classes = class_list)
+    labelencoder = MultiLabelBinarizer(classes=class_list)
     train = labelencoder.fit_transform(train)
     val = labelencoder.fit_transform(val)
     test = labelencoder.transform(test)
-    print("\nTotal classes detected in each set: \n Train = {}, \n Val = {}, \n Test= {}".format(len(train[0]), len(val[0]), len(test[0])))
+    print("\nTotal classes detected in each set: \n Train = {}, \n Val = {}, \n Test= {}".format(
+        len(train[0]), len(val[0]), len(test[0])))
     return train, val, test
 
 
@@ -79,22 +91,23 @@ def build_vocab(data, glove_path):
             if word.lower() not in word_dict:
                 word_dict[word.lower()] = ''
 
-    #unkown token for words not in GLOVE
+    # unkown token for words not in GLOVE
     word_dict['unk'] = ''
     emb_list = []
 
     with open(glove_path, encoding="utf8") as f:
         for sents in f:
-            word, emb = sents.split(' ',1)
+            word, emb = sents.split(' ', 1)
             if word.lower() in word_dict:
                 embeddings[word.lower()] = np.fromstring(emb, sep=' ')
                 emb_list.append(np.fromstring(emb, sep=' '))
 #                 np.array(list(map(float, emb.split())))
     emb_list = np.array(emb_list)
-    avg_emb = np.mean(emb_list, axis = 0)
+    avg_emb = np.mean(emb_list, axis=0)
     embeddings['unk'] = avg_emb
     # print("\nEmbeddings of unk token: \n\n",embeddings['unk'])
-    print("\nFound "+ str(len(embeddings)) + " words with Glove embeddings out of "+ str(len(word_dict)) + " total words in corpus.\n")
+    print("\nFound " + str(len(embeddings)) + " words with Glove embeddings out of " +
+          str(len(word_dict)) + " total words in corpus.\n")
     return word_dict, embeddings
 
 
@@ -105,11 +118,11 @@ def get_batch_from_idx(config, word_emb, batch):
     for i in range(len(batch)):
         for j in range(len(batch[i])):
             if batch[i][j].lower() in word_emb:
-                embedded_docs[j, i, :] = word_emb[batch[i][j].lower()]     # j,i and not i,j since we are working with batch_first = False for LSTMs
+                # j,i and not i,j since we are working with batch_first = False for LSTMs
+                embedded_docs[j, i, :] = word_emb[batch[i][j].lower()]
             else:
                 embedded_docs[j, i, :] = word_emb['unk']
     return torch.from_numpy(embedded_docs).float(), torch.from_numpy(doc_lens)
-
 
 
 #################################################
@@ -117,8 +130,10 @@ def get_batch_from_idx(config, word_emb, batch):
 #################################################
 
 class Reuters(TabularDataset):
-    TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string, include_lengths=True)
-    LABEL = Field(sequential=False, use_vocab=False, batch_first=False, preprocessing=process_labels)
+    TEXT = Field(sequential=True, batch_first=False, lower=True,
+                 use_vocab=True, tokenize=clean_string, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=False,
+                  batch_first=False, preprocessing=process_labels)
     NUM_CLASSES = 90
 
     @staticmethod
@@ -126,9 +141,9 @@ class Reuters(TabularDataset):
         return len(ex.text)
 
     @classmethod
-    def get_dataset_splits(cls, data_dir, train=os.path.join('reuters_split', 'train.tsv'),
-               validation=os.path.join('reuters_split', 'dev.tsv'),
-               test=os.path.join('reuters_split', 'test.tsv'), **kwargs):
+    def get_dataset_splits(cls, data_dir, train='train.tsv',
+                           validation=os.path.join('reuters_split', 'dev.tsv'),
+                           test=os.path.join('reuters_split', 'test.tsv'), **kwargs):
 
         return super(Reuters, cls).splits(
             data_dir, train=train, validation=validation, test=test,
@@ -143,30 +158,35 @@ class Reuters(TabularDataset):
 
         # Build Vocabulary and obtain embeddings for each word in Vocabulary
         print("\n==>> Building Vocabulary and obtaining embeddings....")
-        glove_embeds = torchtext.vocab.Vectors(name= config['glove_path'], max_vectors = int(2e5))
+        glove_embeds = torchtext.vocab.Vectors(
+            name=config['glove_path'], max_vectors=int(2e5))
         cls.TEXT.build_vocab(train, val, test, vectors=glove_embeds)
 
         # Setting 'unk' token as the average of all other embeddings
         if config['model_name'] != 'han':
-            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(cls.TEXT.vocab.vectors, dim=0)
+            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(
+                cls.TEXT.vocab.vectors, dim=0)
 
         # Getting iterators for each set
         print("\n==>> Preparing Iterators....")
         train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
-                                     sort_within_batch=True, device=device)
+                                                                sort_within_batch=True, device=device)
         return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter, train, val, test
 
 
 class Reuters_HAN(Reuters):
-    NESTING = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string)
-    TEXT = NestedField(NESTING, tokenize=split_sents, include_lengths = True)
-    LABEL = Field(sequential=False, use_vocab=False, batch_first=True, preprocessing=process_labels)
+    NESTING = Field(sequential=True, batch_first=True,
+                    lower=True, use_vocab=True, tokenize=clean_string)
+    TEXT = NestedField(NESTING, tokenize=split_sents, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=False,
+                  batch_first=True, preprocessing=process_labels)
 
 
 class Reuters_CNN(Reuters):
-    TEXT = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
-    LABEL = Field(sequential=False, use_vocab=True, batch_first=True, preprocessing=process_labels)
-
+    TEXT = Field(sequential=True, batch_first=True, lower=True, use_vocab=True,
+                 tokenize=clean_string_stop_words_remove, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=True,
+                  batch_first=True, preprocessing=process_labels)
 
 
 ##############################################
@@ -174,8 +194,10 @@ class Reuters_CNN(Reuters):
 ##############################################
 
 class IMDB(TabularDataset):
-    TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string, include_lengths=True)
-    LABEL = Field(sequential=False, use_vocab=False, batch_first=False, preprocessing=process_labels)
+    TEXT = Field(sequential=True, batch_first=False, lower=True,
+                 use_vocab=True, tokenize=clean_string, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=False,
+                  batch_first=False, preprocessing=process_labels)
     NUM_CLASSES = 10
 
     @staticmethod
@@ -184,8 +206,8 @@ class IMDB(TabularDataset):
 
     @classmethod
     def get_dataset_splits(cls, data_dir, train=os.path.join('imdb', 'train.tsv'),
-               validation=os.path.join('imdb', 'dev.tsv'),
-               test=os.path.join('imdb', 'test.tsv'), **kwargs):
+                           validation=os.path.join('imdb', 'dev.tsv'),
+                           test=os.path.join('imdb', 'test.tsv'), **kwargs):
 
         return super(IMDB, cls).splits(
             data_dir, train=train, validation=validation, test=test,
@@ -200,34 +222,39 @@ class IMDB(TabularDataset):
 
         # Build Vocabulary and obtain embeddings for each word in Vocabulary
         print("\n==>> Building Vocabulary and obtaining embeddings....")
-        glove_embeds = torchtext.vocab.Vectors(name= config['glove_path'], max_vectors = int(4e5))
+        glove_embeds = torchtext.vocab.Vectors(
+            name=config['glove_path'], max_vectors=int(4e5))
         cls.TEXT.build_vocab(train, val, test, vectors=glove_embeds)
 
         # Setting 'unk' token as the average of all other embeddings
         if config['model_name'] != 'han':
-            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(cls.TEXT.vocab.vectors, dim=0)
+            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(
+                cls.TEXT.vocab.vectors, dim=0)
 
         # Getting iterators for each set
         print("\n==>> Preparing Iterators....")
         train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
-                                     sort_within_batch=False, device=device)
+                                                                sort_within_batch=False, device=device)
         return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter, train, val, test
 
 
 class IMDB_HAN(IMDB):
-    NESTING = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string)
-    TEXT = NestedField(NESTING, tokenize=split_sents, include_lengths = True)
-    LABEL = Field(sequential=False, use_vocab=False, batch_first=True, preprocessing=process_labels)
+    NESTING = Field(sequential=True, batch_first=True,
+                    lower=True, use_vocab=True, tokenize=clean_string)
+    TEXT = NestedField(NESTING, tokenize=split_sents, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=False,
+                  batch_first=True, preprocessing=process_labels)
 
 
 class IMDB_CNN(IMDB):
-    TEXT = Field(sequential = True, batch_first=True, lower=True, use_vocab=True, tokenize=clean_string_stop_words_remove, include_lengths=True)
-    LABEL = Field(sequential=False, use_vocab=True, batch_first=True, preprocessing=process_labels)
-
+    TEXT = Field(sequential=True, batch_first=True, lower=True, use_vocab=True,
+                 tokenize=clean_string_stop_words_remove, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=True,
+                  batch_first=True, preprocessing=process_labels)
 
 
 class ReutersBatchGenerator():
-    def __init__(self, bucket_iterator, text_field = 'text', label_field = 'label'):
+    def __init__(self, bucket_iterator, text_field='text', label_field='label'):
         self.bucket_iterator = bucket_iterator
         self.text_field = text_field
         self.label_field = label_field
@@ -242,12 +269,14 @@ class ReutersBatchGenerator():
             yield text, label
 
 
-#dumbshit we tried
+# dumbshit we tried
 
 
 class CMU(TabularDataset):
-    TEXT = Field(sequential = True, batch_first=False, lower=True, use_vocab=True, tokenize=clean_string, include_lengths=True)
-    LABEL = Field(sequential=False, use_vocab=False, batch_first=False, preprocessing=process_labels)
+    TEXT = Field(sequential=True, batch_first=False, lower=True,
+                 use_vocab=True, tokenize=clean_string, include_lengths=True)
+    LABEL = Field(sequential=False, use_vocab=False,
+                  batch_first=False, preprocessing=process_labels)
     NUM_CLASSES = 90
 
     @staticmethod
@@ -256,8 +285,8 @@ class CMU(TabularDataset):
 
     @classmethod
     def get_dataset_splits(cls, data_dir, train=os.path.join('cmu_split', 'train.tsv'),
-               validation=os.path.join('cmu_split', 'dev.tsv'),
-               test=os.path.join('cmu_split', 'test.tsv'), **kwargs):
+                           validation=os.path.join('cmu_split', 'dev.tsv'),
+                           test=os.path.join('cmu_split', 'test.tsv'), **kwargs):
 
         return super(CMU, cls).splits(
             data_dir, train=train, validation=validation, test=test,
@@ -272,17 +301,19 @@ class CMU(TabularDataset):
 
         # Build Vocabulary and obtain embeddings for each word in Vocabulary
         print("\n==>> Building Vocabulary and obtaining embeddings....")
-        glove_embeds = torchtext.vocab.Vectors(name= config['glove_path'], max_vectors = int(2e5))
+        glove_embeds = torchtext.vocab.Vectors(
+            name=config['glove_path'], max_vectors=int(2e5))
         cls.TEXT.build_vocab(train, val, test, vectors=glove_embeds)
 
         # Setting 'unk' token as the average of all other embeddings
         if config['model_name'] != 'han':
-            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(cls.TEXT.vocab.vectors, dim=0)
+            cls.TEXT.vocab.vectors[cls.TEXT.vocab.stoi['<unk>']] = torch.mean(
+                cls.TEXT.vocab.vectors, dim=0)
 
         # Getting iterators for each set
         print("\n==>> Preparing Iterators....")
         train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
-                                     sort_within_batch=True, device=device)
+                                                                sort_within_batch=True, device=device)
         return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter, train, val, test
 
 
