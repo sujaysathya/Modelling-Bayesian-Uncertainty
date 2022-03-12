@@ -38,7 +38,7 @@ def prepare_training(config):
     
     elif config['data_name'] == 'cmu':
         TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = CMU.main_handler(config, config['data_path'], shuffle=True)
-    
+        # print(list(torch.utils.data.DataLoader(CMU)))
     else:
         if config['model_name'] == 'han':
             TEXT, LABEL, train_batch_loader, dev_batch_loader, test_batch_loader, train_split, val_split, test_split = IMDB_HAN.main_handler(config, config['data_path'], shuffle=True)
@@ -95,7 +95,7 @@ def calc_elapsed_time(start, end):
 
 
 def get_distributions(config, train_split, val_split, test_split):
-    classes = 90 if config['data_name'] == 'reuters' else 10
+    classes = 90 if config['data_name'] == 'reuters' else 5
 
     train_distrib, val_distrib, test_distrib = np.zeros((len(train_split), classes)), np.zeros((len(val_split), classes)), np.zeros((len(test_split), classes))
     sets = ['train_split', 'val_split', 'test_split']
@@ -107,8 +107,21 @@ def get_distributions(config, train_split, val_split, test_split):
 
     for s in range(len(sets)):
         st = eval(sets[s])
+        print("ST: "+str(st))
+        label_sizes = []
         for i in range(len(st)):
-            eval(dists[s])[i, :] = eval(sets[s])[i].label
+            label_sizes.append(len(st[i].label))
+            print(st[i].label)
+            # print("this is what you want")
+            # print(st[i].label)
+        print("Max label size: "+str(max(label_sizes)))
+        print("Max label size: "+str(min(label_sizes)))
+
+
+        for i in range(len(st)):
+            print("this is what you want")
+            print(st[i].label)
+            eval(dists[s])[i, :] = st[i].label
             # print("this is what you want")
             # print(st[i].label)
 

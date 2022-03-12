@@ -277,20 +277,20 @@ class CMU(TabularDataset):
                  use_vocab=True, tokenize=clean_string, include_lengths=True)
     LABEL = Field(sequential=False, use_vocab=False,
                   batch_first=False, preprocessing=process_labels)
-    NUM_CLASSES = 90
+    NUM_CLASSES = 10
 
     @staticmethod
     def sort_key(ex):
         return len(ex.text)
 
     @classmethod
-    def get_dataset_splits(cls, data_dir, train=os.path.join('cmu_split', 'train.tsv'),
-                           validation=os.path.join('cmu_split', 'dev.tsv'),
-                           test=os.path.join('cmu_split', 'test.tsv'), **kwargs):
+    def get_dataset_splits(cls, data_dir, train=os.path.join('train.tsv'),
+                           validation=os.path.join( 'dev.tsv'),
+                           test=os.path.join( 'test.tsv'), **kwargs):
 
         return super(CMU, cls).splits(
             data_dir, train=train, validation=validation, test=test,
-            format='tsv', fields=[('label', cls.LABEL), ('text', cls.TEXT)])
+            format='tsv', fields=[('label', cls.LABEL), ('text', cls.TEXT)], skip_header=True)
 
     @classmethod
     def main_handler(cls, config, data_dir, shuffle=True):
@@ -314,6 +314,7 @@ class CMU(TabularDataset):
         print("\n==>> Preparing Iterators....")
         train_iter, val_iter, test_iter = BucketIterator.splits((train, val, test), batch_size=config['batch_size'], repeat=False, shuffle=shuffle,
                                                                 sort_within_batch=True, device=device)
+        
         return cls.TEXT, cls.LABEL, train_iter, val_iter, test_iter, train, val, test
 
 
