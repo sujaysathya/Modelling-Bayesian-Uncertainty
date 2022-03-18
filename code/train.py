@@ -309,7 +309,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # Required Paths
     parser.add_argument('--data_path', type=str, default='../data',
-                        help='path to dataset folder that contains the folders to reuters or imdb (raw data)')
+                        help='path to dataset folder that contains the folders to reuters')
     parser.add_argument('--glove_path', type=str, default='../data/glove/glove.840B.300d.txt',
                         help='path for Glove embeddings (850B, 300D)')
     parser.add_argument('--model_checkpoint_path', type=str, default='./model_checkpoints',
@@ -321,7 +321,7 @@ if __name__ == '__main__':
 
     # Training Params
     parser.add_argument('--data_name', type=str, default='reuters',
-                        help='dataset name: reuters / imdb')
+                        help='dataset name: reuters / cmu')
     parser.add_argument('--model_name', type=str, default='cnn',
                         help='model name: bilstm / bilstm_pool / bilstm_reg / han / cnn')
     parser.add_argument('--lr', type=float, default=0.01,
@@ -422,68 +422,6 @@ if __name__ == '__main__':
         shutil.rmtree(vis_path)
     config['n_classes'] = 90 if config['data_name'] == 'reuters' else 227
 
-    ############################################
-    ## Running over 5 seeds to average scores ##
-    ############################################
-    # # SEEDS = [24, 2424, 4242, 3435, 2121]
-    # # MODELS = ['cnn', 'han', 'bilstm', 'bilstm_pool', 'bilstm_reg']
-    # SEEDS = [42, 2121]
-    # MODELS = ['bilstm_reg']
-    # avg_scores = {}
-
-    # for model in MODELS:
-    #     config['model_name'] = model
-    #     avg_scores[model] = {}
-    #     val_f1_list, val_acc_list, test_f1_list, test_acc_list = [], [], [], []
-    #     for seed in SEEDS:
-    #         config['seed'] = seed
-
-    #         # Check all provided paths:
-    #         model_path = os.path.join(config['model_checkpoint_path'], config['data_name'], config['model_name'], str(config['seed']))
-    #         vis_path = os.path.join(config['vis_path'], config['data_name'], config['model_name'])
-    #         if not os.path.exists(config['data_path']):
-    #             raise ValueError("[!] ERROR: Dataset path does not exist")
-    #         else:
-    #             print("\nReuters Data path checked..")
-    #         if not os.path.exists(config['glove_path']):
-    #             raise ValueError("[!] ERROR: Glove Embeddings path does not exist")
-    #         else:
-    #             print("\nGLOVE embeddings path checked..")
-    #         if not os.path.exists(model_path):
-    #             print("\nCreating checkpoint path for saved models at:  {}\n".format(model_path))
-    #             os.makedirs(model_path)
-    #         else:
-    #             print("\nModel save path checked..")
-    #         if config['model_name'] not in ['bilstm', 'bilstm_pool', 'bilstm_reg', 'han', 'cnn']:
-    #             raise ValueError("[!] ERROR:  model_name is incorrect. Choose one of - bilstm / bilstm_pool / bilstm_reg / han / cnn")
-    #         else:
-    #             print("\nModel name checked...")
-    #         if not os.path.exists(vis_path):
-    #             print("\nCreating checkpoint path for Tensorboard visualizations at:  {}\n".format(vis_path))
-    #             os.makedirs(vis_path)
-    #         else:
-    #             print("\nTensorbaord Visualization path checked..")
-    #             print("Cleaning Visualization path of older tensorboard files...\n")
-    #             shutil.rmtree(vis_path)
-    #         config['n_classes'] = 90 if config['data_name'] == 'reuters' else 10
-    #         # Prepare the datasets and iterator for training and evaluation
-    #         train_loader, dev_loader, test_loader, TEXT, LABEL = prepare_training(config)
-    #         vocab = TEXT.vocab
-
-    #         # Prepare the tensorboard writer
-    #         writer = SummaryWriter(os.path.join(args.vis_path, config['model_name']))
-    #         val_f1, val_acc, test_f1, test_acc = train_network()
-    #         val_f1_list.append(val_f1)
-    #         val_acc_list.append(val_acc)
-    #         test_f1_list.append(test_f1)
-    #         test_acc_list.append(test_acc)
-    #     avg_scores[model]['val_f1'] = sum(val_f1_list)/len(val_f1_list)
-    #     avg_scores[model]['val_acc'] = sum(val_acc_list)/len(val_acc_list)
-    #     avg_scores[model]['test_f1'] = sum(test_f1_list)/len(test_f1_list)
-    #     avg_scores[model]['test_acc'] = sum(test_acc_list)/len(test_acc_list)
-    # print("\n\nFinal averagescores are: \n")
-    # print(avg_scores)
-
     # Prepare the datasets and iterator for training and evaluation
     train_loader, dev_loader, test_loader, TEXT, LABEL = prepare_training(
         config)
@@ -503,22 +441,3 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("Keyboard interrupt by user detected...\nClosing the tensorboard writer!")
         writer.close()
-
-    # avg_score = {'cnn': {'val_f1': 0.85803025419576895, 'val_acc': 0.77504009265858875, 'test_f1': 0.84205949864969976, 'test_acc': 0.7664892344497608},
-    # 'han': {'val_f1': 0.76189269303760143, 'val_acc': 0.68134800427655029, 'test_f1': 0.73217943233712146, 'test_acc': 0.65384569377990431},
-    # 'bilstm': {'val_f1': 0.78325010569502784, 'val_acc': 0.6916384533143265, 'test_f1': 0.75549366575645127, 'test_acc': 0.67413875598086115},
-    # 'bilstm_pool': {'val_f1': 0.84474823568092938, 'val_acc': 0.75460174625801846, 'test_f1': 0.8168646393382154, 'test_acc': 0.72799641148325356},
-    # 'bilstm_reg': {'val_f1': 0.88083992584899617, 'val_acc': 0.80452601568068416, 'test_f1': 0.8616731153882411, 'test_acc': 0.78761961722488028}}
-    # pprint(avg_score)
-    # uncert = torch.load('./bayesian_uncertainties_val.pt', map_location=torch.device('cpu'))
-    # val_means = torch.stack(uncert['class_means'])
-    # val_std = torch.stack(uncert['class_std'])
-    # uncert = torch.load('./bayesian_uncertainties_test.pt', map_location=torch.device('cpu'))
-    # test_means = uncert['class_means']
-    # test_std = uncert['class_std']
-    # print(test_means.shape)
-    # print(val_means.shape)
-
-    # for i in range(len(val_means)):
-        # print("\nclass {}: \ntest_mean = {:.4f},    test_std = {:.4f}".format(i+1, val_means[0][i], val_std[0][i], test_means[i], test_std[i]))
-        # print("class {}: \nVal_mean = {:.4f},   val_std = {:.4f},    test_mean = {:.4f},    test_std = {:.4f}\n".format(i+1, val_means[30][i], val_std[30][i], test_means[i], test_std[i]))
