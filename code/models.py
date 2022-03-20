@@ -14,9 +14,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # device = 'cuda'
 
 
-######################
-## Helper Functions ##
-######################
+# _______________________________
+# Helper Functions 
+# _______________________________
 
 """
 The following 2 implementations are taken from the implementation of LSTM-reg in the HEDWIG framework
@@ -55,7 +55,7 @@ class WeightDrop_manual(torch.nn.Module):
         self._setup()
 
     def null_function(*args, **kwargs):
-        # We need to replace flatten_parameters with a nothing function
+        # Replace flatten_parameters with a nothing function
         return
 
     def _setup(self):
@@ -106,9 +106,9 @@ class WeightDrop_manual(torch.nn.Module):
         return self.module.forward(*args)
 
 
-###################
-## Model Classes 
-###################
+# _______________________________
+# Model Classes 
+# _______________________________
 """
 Main class that controls training and calling of other classes based on corresponding model_name
 

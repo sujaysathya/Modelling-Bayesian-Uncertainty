@@ -51,27 +51,20 @@ def eval_network(model, test=False):
                 preds = model(batch.text[0].to(device),
                               batch.text[1].to(device))
                 # preds = (preds>0.5).type(torch.FloatTensor)
-                if config['data_name'] == 'reuters':
-                    preds_rounded = F.sigmoid(preds).round().long()
-                    true_labels = batch.label
-                    # if preds.shape[0] == config['batch_size']:
-                    rep_preds.append(F.sigmoid(preds))
-                elif config['data_name'] == 'cmu':
-                    preds_rounded = F.sigmoid(preds).round().long()
-                    true_labels = batch.label
-                    # if preds.shape[0] == config['batch_size']:
-                    rep_preds.append(F.sigmoid(preds))
-                else:
-                    preds = F.softmax(preds)
-                    preds_rounded = torch.max(preds, 1)[1]
-                    true_labels = torch.max(batch.label.long(), 1)[1]
-                    prediction_over_reps.append(preds_rounded)
+                
+                preds_rounded = F.sigmoid(preds).round().long()
+                true_labels = batch.label
+                # if preds.shape[0] == config['batch_size']:
+                rep_preds.append(F.sigmoid(preds))
+
                 f1, recall, precision, accuracy = evaluation_measures(config, np.array(
                     preds_rounded.cpu().detach().numpy()), np.array(true_labels.cpu().detach().numpy()))
+
                 eval_f1.append(f1)
                 eval_precision.append(precision)
                 eval_recall.append(recall)
                 eval_accuracy.append(accuracy)
+
             rep_preds = torch.stack(rep_preds)
             batch_means = torch.mean(rep_preds, dim=0)
             batch_std = torch.std(rep_preds, dim=0)
@@ -81,6 +74,8 @@ def eval_network(model, test=False):
             else:
                 class_means = torch.cat([class_means, batch_means], dim=0)
                 class_std = torch.cat([class_std, batch_std], dim=0)
+        
+        # Averaging out the results
         eval_precision = sum(eval_precision)/len(eval_precision)
         eval_recall = sum(eval_recall)/len(eval_recall)
         eval_f1 = sum(eval_f1)/len(eval_f1)
@@ -93,7 +88,7 @@ def eval_network(model, test=False):
 
 
 def train_network():
-    print("\n\n" + "="*100 + "\n\t\t\t\t\t Training Network\n" + "="*100)
+    print("_"*100 + "\n\t\t\t\t\t Training Network\n" + "_"*100)
 
     # Seeds for reproduceable runs
     torch.manual_seed(config['seed'])
@@ -119,20 +114,21 @@ def train_network():
     # Load the checkpoint to resume training if found
     model_file = os.path.join(config['model_checkpoint_path'], config['data_name'],
                               config['model_name'], str(config['seed']), config['model_save_name'])
+
     if os.path.isfile(model_file):
         checkpoint = torch.load(model_file)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
-        print("\nResuming training from epoch {} with loaded model and optimizer...\n".format(
+        print("Resuming training from epoch {} with loaded model and optimizer".format(
             start_epoch))
-        print("Using the model defined below: \n\n")
+        print("Using the model defined below:")
         print(model)
+
     else:
         start_epoch = 1
-        print("\nNo Checkpoints found for the chosen model to reusme training... \nTraining the  ''{}''  model from scratch...\n".format(
-            config['model_name']))
-        print("Using the model defined below: \n\n")
+        print("\nNo Checkpoints found for the chosen model to reusme training.Training the  ''{}''  model from scratch".format(config['model_name']))
+        print("Using the model defined below:")
         print(model)
 
     start = time.time()
@@ -144,7 +140,8 @@ def train_network():
     train_loss = []
     MEANS, STD = [], []
     terminate_training = False
-    print("\nBeginning training at:  {} \n".format(datetime.datetime.now()))
+
+    print("Beginning training at:  {}".format(datetime.datetime.now()))
     # for epoch in range(start_epoch, config['max_epoch']+1):
     for epoch in range(50):
         train_f1_score, train_recall_score, train_precision_score, train_accuracy_score = [], [], [], []
@@ -154,16 +151,7 @@ def train_network():
             model.train()
             # lr_scheduler.step()
             preds = model(batch.text[0].to(device), batch.text[1].to(device))
-            if config['data_name'] == 'reuters':
-                loss = F.binary_cross_entropy_with_logits(
-                    preds, batch.label.float())
-            elif config['data_name'] == 'cmu':
-                loss = F.binary_cross_entropy_with_logits(
-                    preds, batch.label.float())
-            else:
-                preds = F.softmax(preds)
-                true_labels = torch.max(batch.label.long(), 1)[1]
-                loss = criterion(preds,  true_labels)
+            loss = F.binary_cross_entropy_with_logits(preds, batch.label.float())
 
             optimizer.zero_grad()
             loss.backward()
@@ -176,15 +164,9 @@ def train_network():
                     model.encoder.update_ema()
 
             # preds = (preds>0.5).type(torch.FloatTensor)
-            if config['data_name'] == 'reuters':
-                preds_rounded = F.sigmoid(preds).round().long()
-                true_labels = batch.label
-            elif config['data_name'] == 'cmu':
-                preds_rounded = F.sigmoid(preds).round().long()
-                true_labels = batch.label
-            else:
-                preds_rounded = torch.max(preds, 1)[1]
-                true_labels = torch.max(batch.label, 1)[1]
+            
+            preds_rounded = F.sigmoid(preds).round().long()
+            true_labels = batch.label
             # print(true_labels)
             # print(preds_rounded)
             # print(preds)
@@ -220,8 +202,7 @@ def train_network():
         total_iters += iters
 
         # Evaluate on test set
-        eval_f1, eval_precision, eval_recall, eval_accuracy, class_means, class_std = eval_network(
-            model)
+        eval_f1, eval_precision, eval_recall, eval_accuracy, class_means, class_std = eval_network(model)
 
         if config['bayesian_mode']:
             MEANS.append(class_means)
@@ -258,16 +239,18 @@ def train_network():
                 'optimizer_state_dict': optimizer.state_dict(),
             }, os.path.join(config['model_checkpoint_path'], config['data_name'], config['model_name'], str(config['seed']), config['model_save_name']))
 
-        # If validation f1 score does not improve, divide the learning rate by 5 and
+        # If validation f1 score does not improve for 10 epochs, divide the learning rate by 5 and
         # if learning rate falls below given threshold, then terminate training
+        epoch_count = 1
         if eval_f1 <= prev_val_f1:
             for param_group in optimizer.param_groups:
                 if param_group['lr'] < config['lr_cut_off']:
                     terminate_training = True
                     break
-                param_group['lr'] /= 5
-                print("Learning rate changed to :  {}\n".format(
-                    param_group['lr']))
+                elif epoch_count == 0:
+                    param_group['lr'] /= 5
+                    print("Learning rate changed to :  {}\n".format(param_group['lr']))
+                epoch_count = (epoch_count+1)%10
 
         prev_val_f1 = eval_f1
         if terminate_training:
@@ -275,19 +258,18 @@ def train_network():
 
     # Termination message
     if terminate_training:
-        print("\n" + "-"*100 +
-              "\nTraining terminated because the learning rate fell below:  {}" .format(config['lr_cut_off']))
+        print("-"*100 +"Training terminated because the learning rate fell below:  {}" .format(config['lr_cut_off']))
     else:
-        print("\n" + "-"*100 + "\nMaximum epochs reached. Finished training !!")
+        print("-"*100 + "\nMaximum epochs reached. Finished training !!")
 
-    print("\n" + "-"*50 + "\n\t\tEvaluating on test set\n" + "-"*50)
+    print("-"*50 + "\n\t\tEvaluating on test set\n" + "-"*50)
     model_file = os.path.join(config['model_checkpoint_path'], config['data_name'],
                               config['model_name'], str(config['seed']), config['model_save_name'])
     if os.path.isfile(model_file):
         checkpoint = torch.load(model_file)
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
-        raise ValueError("No Saved model state_dict found for the chosen model...!!! \nAborting evaluation on test set...".format(
+        raise ValueError("No Saved model state_dict found for the chosen model!!! \nAborting evaluation.".format(
             config['model_name']))
     test_f1, test_precision, test_recall, test_accuracy, class_means, class_std = eval_network(
         model, test=True)
@@ -323,7 +305,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_name', type=str, default='reuters',
                         help='dataset name: reuters / cmu')
     parser.add_argument('--model_name', type=str, default='cnn',
-                        help='model name: bilstm / bilstm_pool / bilstm_reg / han / cnn')
+                        help='model name: bilstm / bilstm_pool / bilstm_reg / cnn')
     parser.add_argument('--lr', type=float, default=0.01,
                         help='Learning rate for training')
     parser.add_argument('--batch_size', type=int, default=32,
@@ -338,7 +320,7 @@ if __name__ == '__main__':
                         help='dimen of hidden unit of sentence-level attn GRU units of HAN"')
     parser.add_argument('--fc_dim', type=int, default=128,
                         help='dimen of FC layer"')
-    parser.add_argument('--n_classes', type=int, default=90,
+    parser.add_argument('--n_classes', type=int, default=20,
                         help='number of classes"')
     parser.add_argument('--optimizer', type=str, default='Adam',
                         help='Optimizer to use for training')
@@ -378,17 +360,6 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     config['device'] = device
-
-    # global dtype
-    # dtype = torch.FloatTensor
-
-    # classes = ['acq', 'alum', 'barley', 'bop', 'carcass', 'castor-oil', 'cocoa', 'coconut', 'coconut-oil', 'coffee', 'copper', 'copra-cake', 'corn', 'cotton', 'cotton-oil',
-    #            'cpi', 'cpu', 'crude', 'dfl', 'dlr', 'dmk', 'earn', 'fuel', 'gas', 'gnp', 'gold', 'grain', 'groundnut', 'groundnut-oil', 'heat', 'hog', 'housing', 'income',
-    #            'instal-debt', 'interest', 'ipi', 'iron-steel', 'jet', 'jobs', 'l-cattle', 'lead', 'lei', 'lin-oil', 'livestock', 'lumber', 'meal-feed', 'money-fx',
-    #            'money-supply', 'naphtha', 'nat-gas', 'nickel', 'nkr', 'nzdlr', 'oat', 'oilseed', 'orange', 'palladium', 'palm-oil', 'palmkernel', 'pet-chem', 'platinum',
-    #            'potato', 'propane', 'rand', 'rape-oil', 'rapeseed', 'reserves', 'retail', 'rice', 'rubber', 'rye', 'ship', 'silver', 'sorghum', 'soy-meal', 'soy-oil', 'soybean',
-    #            'strategic-metal', 'sugar', 'sun-meal', 'sun-oil', 'sunseed', 'tea', 'tin', 'trade', 'veg-oil', 'wheat', 'wpi', 'yen', 'zinc']
-
     # Check all provided paths:
     model_path = os.path.join(config['model_checkpoint_path'],
                               config['data_name'], config['model_name'], str(config['seed']))
@@ -397,30 +368,29 @@ if __name__ == '__main__':
     if not os.path.exists(config['data_path']):
         raise ValueError("[!] ERROR: Dataset path does not exist")
     else:
-        print("\nReuters Data path checked..")
+        print("Data path checked")
     if not os.path.exists(config['glove_path']):
-        raise ValueError("[!] ERROR: Glove Embeddings path does not exist")
+        raise ValueError("[!] ERROR: GLOVE Embeddings path does not exist")
     else:
-        print("\nGLOVE embeddings path checked..")
+        print("GLOVE embeddings path checked")
     if not os.path.exists(model_path):
-        print("\nCreating checkpoint path for saved models at:  {}\n".format(model_path))
+        print("Creating checkpoint path for saved models at:  {}\n".format(model_path))
         os.makedirs(model_path)
     else:
-        print("\nModel save path checked..")
+        print("Model save path checked..")
     if config['model_name'] not in ['bilstm', 'bilstm_pool', 'bilstm_reg', 'han', 'cnn']:
-        raise ValueError(
-            "[!] ERROR:  model_name is incorrect. Choose one of - bilstm / bilstm_pool / bilstm_reg / han / cnn")
+        raise ValueError("[!] ERROR:  model_name is incorrect. Choose one of - bilstm / bilstm_pool / bilstm_reg / cnn")
     else:
-        print("\nModel name checked...")
+        print("Model name checked")
     if not os.path.exists(vis_path):
-        print("\nCreating checkpoint path for Tensorboard visualizations at:  {}\n".format(
+        print("Creating checkpoint path for Tensorboard visualizations at:  {}\n".format(
             vis_path))
         os.makedirs(vis_path)
     else:
-        print("\nTensorbaord Visualization path checked..")
-        print("Cleaning Visualization path of older tensorboard files...\n")
+        print("Tensorbaord Visualization path checked")
+        print("Cleaning Visualization path of older tensorboard files.\n")
         shutil.rmtree(vis_path)
-    config['n_classes'] = 90 if config['data_name'] == 'reuters' else 227
+    config['n_classes'] = 20
 
     # Prepare the datasets and iterator for training and evaluation
     train_loader, dev_loader, test_loader, TEXT, LABEL = prepare_training(
@@ -428,10 +398,10 @@ if __name__ == '__main__':
     vocab = TEXT.vocab
 
     # Print args
-    print("\n" + "x"*50 + "\n\nRunning training with the following parameters: \n")
+    print("x"*50 + "\nRunning training with the following parameters:")
     for key, value in config.items():
         print(key + ' : ' + str(value))
-    print("\n" + "x"*50)
+    print("x"*50)
 
     # Prepare the tensorboard writer
     writer = SummaryWriter(os.path.join(args.vis_path, config['model_name']))
@@ -439,5 +409,5 @@ if __name__ == '__main__':
     try:
         train_network()
     except KeyboardInterrupt:
-        print("Keyboard interrupt by user detected...\nClosing the tensorboard writer!")
+        print("Keyboard interrupt by user detected\nClosing the tensorboard writer!")
         writer.close()
